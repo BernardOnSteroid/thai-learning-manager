@@ -419,11 +419,505 @@ function showSuccess(message) {
   alert(message);
 }
 
-// Placeholder functions for other pages
+// ============ Entry Management Functions ============
+
+let currentEntries = [];
+let currentFilters = { cefr_level: '', entry_type: '', tone: '', archived: false };
+
 async function loadEntriesPage() {
   const container = document.getElementById('entries-content');
-  if (container) {
-    container.innerHTML = '<p class="text-gray-500 text-center py-8">Entries management coming in Prompt 7...</p>';
+  if (!container) return;
+  
+  showLoading('entries-content');
+  
+  try {
+    // Render filter controls and create button
+    container.innerHTML = `
+      <div class="mb-6">
+        <!-- Create Entry Button -->
+        <button onclick="showCreateEntryForm()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold mb-6 inline-flex items-center">
+          <i class="fas fa-plus mr-2"></i>Create New Entry
+        </button>
+        
+        <!-- Filter Controls -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-filter text-blue-600 mr-2"></i>Filters
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">CEFR Level</label>
+              <select id="filter-cefr" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
+                <option value="">All Levels</option>
+                <option value="A1">A1 - Breakthrough</option>
+                <option value="A2">A2 - Waystage</option>
+                <option value="B1">B1 - Threshold</option>
+                <option value="B2">B2 - Vantage</option>
+                <option value="C1">C1 - Proficiency</option>
+                <option value="C2">C2 - Mastery</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Entry Type</label>
+              <select id="filter-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
+                <option value="">All Types</option>
+                <option value="word">Word</option>
+                <option value="verb">Verb</option>
+                <option value="phrase">Phrase</option>
+                <option value="classifier">Classifier</option>
+                <option value="particle">Particle</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Tone</label>
+              <select id="filter-tone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
+                <option value="">All Tones</option>
+                <option value="mid">🔵 Mid</option>
+                <option value="low">🟢 Low</option>
+                <option value="falling">🔴 Falling</option>
+                <option value="high">🟠 High</option>
+                <option value="rising">🟣 Rising</option>
+              </select>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select id="filter-archived" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
+                <option value="false">Active Only</option>
+                <option value="true">Archived Only</option>
+                <option value="all">All Entries</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="mt-4 flex justify-end">
+            <button onclick="clearFilters()" class="text-sm text-blue-600 hover:text-blue-800">
+              <i class="fas fa-redo mr-1"></i>Clear Filters
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Entries List -->
+      <div id="entries-list"></div>
+      
+      <!-- Create/Edit Entry Modal -->
+      <div id="entry-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+              <h3 id="modal-title" class="text-2xl font-bold text-gray-800">Create New Entry</h3>
+              <button onclick="closeEntryModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+              </button>
+            </div>
+            
+            <form id="entry-form" onsubmit="submitEntry(event)">
+              <input type="hidden" id="entry-id" value="">
+              
+              <!-- Thai Script -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Thai Script <span class="text-red-600">*</span>
+                </label>
+                <input type="text" id="thai-script" required 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 thai-text text-2xl"
+                       placeholder="สวัสดี">
+              </div>
+              
+              <!-- Romanization -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Romanization <span class="text-red-600">*</span>
+                </label>
+                <input type="text" id="romanization" required 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                       placeholder="sawasdee">
+              </div>
+              
+              <!-- Row: Tone, Entry Type, CEFR Level -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Tone <span class="text-red-600">*</span>
+                  </label>
+                  <select id="tone" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select tone</option>
+                    <option value="mid">🔵 Mid</option>
+                    <option value="low">🟢 Low</option>
+                    <option value="falling">🔴 Falling</option>
+                    <option value="high">🟠 High</option>
+                    <option value="rising">🟣 Rising</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Entry Type <span class="text-red-600">*</span>
+                  </label>
+                  <select id="entry-type" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select type</option>
+                    <option value="word">Word</option>
+                    <option value="verb">Verb</option>
+                    <option value="phrase">Phrase</option>
+                    <option value="classifier">Classifier</option>
+                    <option value="particle">Particle</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    CEFR Level <span class="text-red-600">*</span>
+                  </label>
+                  <select id="cefr-level" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select level</option>
+                    <option value="A1">A1 - Breakthrough</option>
+                    <option value="A2">A2 - Waystage</option>
+                    <option value="B1">B1 - Threshold</option>
+                    <option value="B2">B2 - Vantage</option>
+                    <option value="C1">C1 - Proficiency</option>
+                    <option value="C2">C2 - Mastery</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Meaning -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Meaning (English) <span class="text-red-600">*</span>
+                </label>
+                <input type="text" id="meaning" required 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                       placeholder="hello, goodbye">
+              </div>
+              
+              <!-- Difficulty -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Difficulty (1-5)
+                </label>
+                <input type="number" id="difficulty" min="1" max="5" value="3"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+              </div>
+              
+              <!-- Classifier -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Classifier (ลักษณนาม)
+                </label>
+                <input type="text" id="classifier" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 thai-text"
+                       placeholder="ตัว, คน, อัน">
+              </div>
+              
+              <!-- Polite Form -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Polite Form
+                </label>
+                <input type="text" id="polite-form" 
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 thai-text"
+                       placeholder="ครับ/ค่ะ">
+              </div>
+              
+              <!-- Grammar Notes -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Grammar Notes
+                </label>
+                <textarea id="grammar-notes" rows="3"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          placeholder="Usage notes, conjugation patterns, etc."></textarea>
+              </div>
+              
+              <!-- Examples -->
+              <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Example Sentences (JSON array - optional)
+                </label>
+                <textarea id="examples" rows="4"
+                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                          placeholder='[{"thai":"สวัสดีครับ","romanization":"sawasdee krap","english":"Hello (male)"}]'></textarea>
+                <p class="text-xs text-gray-500 mt-1">Format: Array of objects with thai, romanization, and english fields</p>
+              </div>
+              
+              <!-- Form Actions -->
+              <div class="flex justify-end space-x-3">
+                <button type="button" onclick="closeEntryModal()" 
+                        class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                  Cancel
+                </button>
+                <button type="submit" 
+                        class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold">
+                  <i class="fas fa-save mr-2"></i><span id="submit-btn-text">Create Entry</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Load entries
+    await loadEntries();
+    
+  } catch (error) {
+    showError('entries-content', 'Failed to load entries page: ' + error.message);
+  }
+}
+
+async function loadEntries() {
+  try {
+    // Build query string with filters
+    const params = new URLSearchParams();
+    if (currentFilters.cefr_level) params.append('cefr_level', currentFilters.cefr_level);
+    if (currentFilters.entry_type) params.append('entry_type', currentFilters.entry_type);
+    if (currentFilters.tone) params.append('tone', currentFilters.tone);
+    if (currentFilters.archived !== 'all') {
+      params.append('archived', currentFilters.archived === 'true' ? 'true' : 'false');
+    }
+    params.append('limit', '100');
+    
+    const entries = await apiRequest(`/api/entries?${params.toString()}`);
+    currentEntries = entries;
+    
+    renderEntriesList(entries);
+  } catch (error) {
+    showError('entries-list', 'Failed to load entries: ' + error.message);
+  }
+}
+
+function renderEntriesList(entries) {
+  const container = document.getElementById('entries-list');
+  if (!container) return;
+  
+  if (entries.length === 0) {
+    container.innerHTML = `
+      <div class="bg-white rounded-lg shadow p-8 text-center">
+        <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+        <p class="text-gray-600 text-lg mb-2">No entries found</p>
+        <p class="text-gray-500 text-sm">Create your first Thai entry to get started!</p>
+      </div>
+    `;
+    return;
+  }
+  
+  const toneEmojis = {
+    'mid': '🔵',
+    'low': '🟢',
+    'falling': '🔴',
+    'high': '🟠',
+    'rising': '🟣'
+  };
+  
+  const cefrColors = {
+    'A1': 'bg-green-100 text-green-800',
+    'A2': 'bg-blue-100 text-blue-800',
+    'B1': 'bg-yellow-100 text-yellow-800',
+    'B2': 'bg-orange-100 text-orange-800',
+    'C1': 'bg-red-100 text-red-800',
+    'C2': 'bg-purple-100 text-purple-800'
+  };
+  
+  container.innerHTML = `
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <p class="text-sm text-gray-600">
+          <strong>${entries.length}</strong> ${entries.length === 1 ? 'entry' : 'entries'} found
+        </p>
+      </div>
+      
+      <div class="divide-y divide-gray-200">
+        ${entries.map(entry => `
+          <div class="p-6 hover:bg-gray-50 transition-colors ${entry.archived ? 'opacity-50' : ''}">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <div class="flex items-center mb-2">
+                  <h3 class="text-2xl font-bold text-gray-800 thai-text mr-3">${entry.thai_script}</h3>
+                  <span class="text-lg text-gray-500">${toneEmojis[entry.tone]}</span>
+                  <span class="ml-3 px-2 py-1 text-xs font-semibold rounded ${cefrColors[entry.cefr_level]}">${entry.cefr_level}</span>
+                  <span class="ml-2 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">${entry.entry_type}</span>
+                  ${entry.archived ? '<span class="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded">Archived</span>' : ''}
+                </div>
+                <p class="text-gray-600 mb-1"><strong>${entry.romanization}</strong></p>
+                <p class="text-gray-700 mb-2">${entry.meaning}</p>
+                ${entry.classifier ? `<p class="text-sm text-gray-600"><strong>Classifier:</strong> <span class="thai-text">${entry.classifier}</span></p>` : ''}
+                ${entry.grammar_notes ? `<p class="text-sm text-gray-600 mt-2"><strong>Notes:</strong> ${entry.grammar_notes}</p>` : ''}
+              </div>
+              
+              <div class="flex space-x-2 ml-4">
+                <button onclick="editEntry('${entry.id}')" 
+                        class="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                        title="Edit">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button onclick="toggleArchive('${entry.id}', ${!entry.archived})" 
+                        class="p-2 text-yellow-600 hover:bg-yellow-50 rounded"
+                        title="${entry.archived ? 'Unarchive' : 'Archive'}">
+                  <i class="fas fa-${entry.archived ? 'box-open' : 'archive'}"></i>
+                </button>
+                <button onclick="deleteEntry('${entry.id}')" 
+                        class="p-2 text-red-600 hover:bg-red-50 rounded"
+                        title="Delete">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function applyFilters() {
+  currentFilters.cefr_level = document.getElementById('filter-cefr').value;
+  currentFilters.entry_type = document.getElementById('filter-type').value;
+  currentFilters.tone = document.getElementById('filter-tone').value;
+  currentFilters.archived = document.getElementById('filter-archived').value;
+  loadEntries();
+}
+
+function clearFilters() {
+  document.getElementById('filter-cefr').value = '';
+  document.getElementById('filter-type').value = '';
+  document.getElementById('filter-tone').value = '';
+  document.getElementById('filter-archived').value = 'false';
+  currentFilters = { cefr_level: '', entry_type: '', tone: '', archived: false };
+  loadEntries();
+}
+
+function showCreateEntryForm() {
+  document.getElementById('modal-title').textContent = 'Create New Entry';
+  document.getElementById('submit-btn-text').textContent = 'Create Entry';
+  document.getElementById('entry-form').reset();
+  document.getElementById('entry-id').value = '';
+  document.getElementById('entry-modal').classList.remove('hidden');
+}
+
+function closeEntryModal() {
+  document.getElementById('entry-modal').classList.add('hidden');
+}
+
+async function submitEntry(event) {
+  event.preventDefault();
+  
+  const entryId = document.getElementById('entry-id').value;
+  const isEdit = !!entryId;
+  
+  // Parse examples JSON if provided
+  let examples = [];
+  const examplesText = document.getElementById('examples').value.trim();
+  if (examplesText) {
+    try {
+      examples = JSON.parse(examplesText);
+    } catch (e) {
+      alert('Invalid JSON format for examples. Please check and try again.');
+      return;
+    }
+  }
+  
+  const entryData = {
+    thai_script: document.getElementById('thai-script').value,
+    romanization: document.getElementById('romanization').value,
+    tone: document.getElementById('tone').value,
+    meaning: document.getElementById('meaning').value,
+    entry_type: document.getElementById('entry-type').value,
+    cefr_level: document.getElementById('cefr-level').value,
+    difficulty: parseInt(document.getElementById('difficulty').value) || 3,
+    classifier: document.getElementById('classifier').value || '',
+    polite_form: document.getElementById('polite-form').value || '',
+    grammar_notes: document.getElementById('grammar-notes').value || '',
+    examples: examples
+  };
+  
+  try {
+    if (isEdit) {
+      await apiRequest(`/api/entries/${entryId}`, {
+        method: 'PUT',
+        body: JSON.stringify(entryData)
+      });
+      showSuccess('Entry updated successfully!');
+    } else {
+      await apiRequest('/api/entries', {
+        method: 'POST',
+        body: JSON.stringify(entryData)
+      });
+      showSuccess('Entry created successfully!');
+    }
+    
+    closeEntryModal();
+    await loadEntries();
+    await loadDashboard(); // Refresh dashboard stats
+    
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+
+async function editEntry(entryId) {
+  try {
+    const entry = await apiRequest(`/api/entries/${entryId}`);
+    
+    document.getElementById('modal-title').textContent = 'Edit Entry';
+    document.getElementById('submit-btn-text').textContent = 'Update Entry';
+    document.getElementById('entry-id').value = entry.id;
+    document.getElementById('thai-script').value = entry.thai_script;
+    document.getElementById('romanization').value = entry.romanization;
+    document.getElementById('tone').value = entry.tone;
+    document.getElementById('meaning').value = entry.meaning;
+    document.getElementById('entry-type').value = entry.entry_type;
+    document.getElementById('cefr-level').value = entry.cefr_level;
+    document.getElementById('difficulty').value = entry.difficulty || 3;
+    document.getElementById('classifier').value = entry.classifier || '';
+    document.getElementById('polite-form').value = entry.polite_form || '';
+    document.getElementById('grammar-notes').value = entry.grammar_notes || '';
+    
+    if (entry.examples && entry.examples.length > 0) {
+      document.getElementById('examples').value = JSON.stringify(entry.examples, null, 2);
+    } else {
+      document.getElementById('examples').value = '';
+    }
+    
+    document.getElementById('entry-modal').classList.remove('hidden');
+    
+  } catch (error) {
+    alert('Error loading entry: ' + error.message);
+  }
+}
+
+async function deleteEntry(entryId) {
+  if (!confirm('Are you sure you want to permanently delete this entry?')) {
+    return;
+  }
+  
+  try {
+    await apiRequest(`/api/entries/${entryId}`, {
+      method: 'DELETE'
+    });
+    showSuccess('Entry deleted successfully!');
+    await loadEntries();
+    await loadDashboard();
+  } catch (error) {
+    alert('Error deleting entry: ' + error.message);
+  }
+}
+
+async function toggleArchive(entryId, archived) {
+  try {
+    await apiRequest(`/api/entries/${entryId}/archive`, {
+      method: 'PATCH',
+      body: JSON.stringify({ archived })
+    });
+    showSuccess(archived ? 'Entry archived' : 'Entry unarchived');
+    await loadEntries();
+    await loadDashboard();
+  } catch (error) {
+    alert('Error updating entry: ' + error.message);
   }
 }
 

@@ -71,27 +71,87 @@ export async function getEntries(
 ): Promise<ThaiEntry[]> {
   const sql = getDbClient(databaseUrl);
   
-  // Build query with conditions
-  let query = 'SELECT * FROM entries WHERE archived = ' + (filters?.archived !== undefined ? filters.archived : 'false');
+  // Build filters - we'll use template literal with interpolation
+  const archivedFilter = filters?.archived !== undefined ? filters.archived : false;
   
-  if (filters?.cefr_level) {
-    query += ` AND cefr_level = '${filters.cefr_level}'`;
-  }
-  if (filters?.entry_type) {
-    query += ` AND entry_type = '${filters.entry_type}'`;
-  }
-  if (filters?.tone) {
-    query += ` AND tone = '${filters.tone}'`;
+  // Execute based on filters
+  let entries;
+  
+  if (!filters || (!filters.cefr_level && !filters.entry_type && !filters.tone)) {
+    // No specific filters - just archived status
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter}
+      ORDER BY created_at DESC
+      LIMIT ${filters?.limit || 100}
+    `;
+  } else if (filters.cefr_level && !filters.entry_type && !filters.tone) {
+    // CEFR filter only
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter} AND cefr_level = ${filters.cefr_level}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
+  } else if (filters.entry_type && !filters.cefr_level && !filters.tone) {
+    // Type filter only
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter} AND entry_type = ${filters.entry_type}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
+  } else if (filters.tone && !filters.cefr_level && !filters.entry_type) {
+    // Tone filter only
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter} AND tone = ${filters.tone}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
+  } else if (filters.cefr_level && filters.entry_type && !filters.tone) {
+    // CEFR + Type
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter} 
+        AND cefr_level = ${filters.cefr_level}
+        AND entry_type = ${filters.entry_type}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
+  } else if (filters.cefr_level && filters.tone && !filters.entry_type) {
+    // CEFR + Tone
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter} 
+        AND cefr_level = ${filters.cefr_level}
+        AND tone = ${filters.tone}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
+  } else if (filters.entry_type && filters.tone && !filters.cefr_level) {
+    // Type + Tone
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter} 
+        AND entry_type = ${filters.entry_type}
+        AND tone = ${filters.tone}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
+  } else {
+    // All three filters
+    entries = await sql`
+      SELECT * FROM entries 
+      WHERE archived = ${archivedFilter}
+        AND cefr_level = ${filters.cefr_level || 'A1'}
+        AND entry_type = ${filters.entry_type || 'word'}
+        AND tone = ${filters.tone || 'mid'}
+      ORDER BY created_at DESC
+      LIMIT ${filters.limit || 100}
+    `;
   }
   
-  query += ' ORDER BY created_at DESC';
-  
-  if (filters?.limit) {
-    query += ` LIMIT ${filters.limit}`;
-  }
-  
-  // Execute raw SQL query using neon() function
-  const entries = await sql(query);
   return entries as ThaiEntry[];
 }
 
