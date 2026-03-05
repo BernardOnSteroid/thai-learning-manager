@@ -338,54 +338,304 @@ app.get('/docs', (c) => {
 app.get('/', (c) => {
   return c.html(`
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="th">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Thai Learning Manager</title>
+        <title>Thai Learning Manager - เรียนภาษาไทย</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <style>
+          body {
+            font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
+          }
+          .thai-text {
+            font-family: 'Noto Sans Thai', sans-serif;
+          }
+        </style>
     </head>
-    <body class="bg-gray-100 p-8">
-        <div class="max-w-4xl mx-auto">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2" style="font-family: 'Noto Sans Thai', sans-serif;">
-                <i class="fas fa-language mr-2"></i>
-                🇹🇭 Thai Learning Manager
-            </h1>
-            <p class="text-xl text-gray-600 mb-2" style="font-family: 'Sarabun', sans-serif;">เรียนภาษาไทย</p>
-            <p class="text-sm text-gray-500 mb-8">Learn Thai with CEFR-based spaced repetition</p>
-            
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-                <p class="text-gray-600 mb-2"><strong>Version:</strong> ${VERSION}</p>
-                <p class="text-gray-600 mb-2"><strong>Database:</strong> Neon PostgreSQL</p>
-                <p class="text-gray-600 mb-2"><strong>Levels:</strong> CEFR (A1-C2)</p>
-                <p class="text-gray-600 mb-6"><strong>Features:</strong> 5 Tones • Classifiers • Spaced Repetition</p>
-                
-                <a href="/docs" class="inline-block bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg">
-                    <i class="fas fa-book mr-2"></i>View API Documentation
-                </a>
+    <body class="bg-gray-50 min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-md sticky top-0 z-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <h1 class="text-2xl font-bold text-gray-800 thai-text">
+                            <i class="fas fa-language text-blue-600 mr-2"></i>
+                            🇹🇭 Thai Learning Manager
+                        </h1>
+                    </div>
+                    
+                    <!-- Desktop Navigation -->
+                    <div class="hidden md:flex items-center space-x-4">
+                        <a href="#" data-page="dashboard" class="px-3 py-2 rounded-md text-sm font-medium text-blue-600">
+                            <i class="fas fa-chart-line mr-1"></i>Dashboard
+                        </a>
+                        <a href="#" data-page="entries" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-list mr-1"></i>Browse
+                        </a>
+                        <a href="#" data-page="learn" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-graduation-cap mr-1"></i>Learn
+                        </a>
+                        <a href="#" data-page="review" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-brain mr-1"></i>Review
+                        </a>
+                        <a href="/docs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-book mr-1"></i>Docs
+                        </a>
+                    </div>
+                    
+                    <!-- Mobile menu button -->
+                    <div class="md:hidden flex items-center">
+                        <button id="mobile-menu-btn" class="text-gray-600 hover:text-blue-600 focus:outline-none">
+                            <i class="fas fa-bars text-2xl"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-bold text-green-800 mb-2">CEFR Levels</h3>
-                    <ul class="text-sm text-green-700 space-y-1">
-                        <li>🟢 A1-A2: Beginner Thai</li>
-                        <li>🔵 B1-B2: Intermediate Thai</li>
-                        <li>🟣 C1-C2: Advanced Thai</li>
-                    </ul>
+            <!-- Mobile menu -->
+            <div id="mobile-menu" class="hidden md:hidden bg-white border-t border-gray-200">
+                <div class="px-2 pt-2 pb-3 space-y-1">
+                    <a href="#" data-page="dashboard" class="block px-3 py-2 rounded-md text-base font-medium text-blue-600">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </a>
+                    <a href="#" data-page="entries" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-list mr-2"></i>Browse Entries
+                    </a>
+                    <a href="#" data-page="learn" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-graduation-cap mr-2"></i>Learn New
+                    </a>
+                    <a href="#" data-page="review" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-brain mr-2"></i>Review
+                    </a>
+                    <a href="/docs" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-book mr-2"></i>API Docs
+                    </a>
                 </div>
-                
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            
+            <!-- Dashboard Page -->
+            <div id="dashboard-page">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-chart-line text-blue-600 mr-2"></i>
+                        Learning Dashboard
+                    </h2>
+                    <p class="text-gray-600">Track your Thai learning progress</p>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Total Entries</p>
+                                <p id="total-entries" class="text-3xl font-bold text-gray-800">0</p>
+                            </div>
+                            <div class="bg-blue-100 rounded-full p-3">
+                                <i class="fas fa-book text-blue-600 text-2xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Learning</p>
+                                <p id="learning-progress" class="text-3xl font-bold text-green-600">0</p>
+                            </div>
+                            <div class="bg-green-100 rounded-full p-3">
+                                <i class="fas fa-graduation-cap text-green-600 text-2xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Due for Review</p>
+                                <p id="due-review" class="text-3xl font-bold text-orange-600">0</p>
+                            </div>
+                            <div class="bg-orange-100 rounded-full p-3">
+                                <i class="fas fa-brain text-orange-600 text-2xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-600 mb-1">Progress</p>
+                                <p id="progress-percent" class="text-3xl font-bold text-purple-600">0%</p>
+                            </div>
+                            <div class="bg-purple-100 rounded-full p-3">
+                                <i class="fas fa-chart-pie text-purple-600 text-2xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progress-bar" class="bg-purple-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Learning State Breakdown -->
+                <div class="bg-white rounded-lg shadow p-6 mb-8">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-layer-group text-blue-600 mr-2"></i>
+                        Learning State
+                    </h3>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center">
+                            <p id="state-new" class="text-3xl font-bold text-blue-600">0</p>
+                            <p class="text-sm text-gray-600 mt-1">New</p>
+                        </div>
+                        <div class="text-center">
+                            <p id="state-learning" class="text-3xl font-bold text-yellow-600">0</p>
+                            <p class="text-sm text-gray-600 mt-1">Learning</p>
+                        </div>
+                        <div class="text-center">
+                            <p id="state-mastered" class="text-3xl font-bold text-green-600">0</p>
+                            <p class="text-sm text-gray-600 mt-1">Mastered</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CEFR Progression -->
+                <div class="bg-white rounded-lg shadow p-6 mb-8">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-layer-group text-blue-600 mr-2"></i>
+                        CEFR Progression
+                    </h3>
+                    <div id="cefr-progression-bars" class="mb-4">
+                        <!-- CEFR bars will be rendered here -->
+                    </div>
+                    <div class="bg-blue-50 rounded-lg p-4 mt-4">
+                        <p class="text-sm text-blue-800">
+                            <i class="fas fa-lightbulb mr-2"></i>
+                            <strong>Focus Recommendation:</strong> 
+                            <span id="focus-message">Loading...</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div style="height: 300px;">
+                            <canvas id="cefr-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div style="height: 300px;">
+                            <canvas id="type-chart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div style="height: 300px;">
+                            <canvas id="tone-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thai Tone Reference -->
                 <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg shadow p-6">
-                    <h3 class="text-lg font-bold text-purple-800 mb-2">Thai Tones</h3>
-                    <ul class="text-sm text-purple-700 space-y-1">
-                        <li>🔵 Mid • 🟢 Low • 🔴 Falling</li>
-                        <li>🟠 High • 🟣 Rising</li>
-                    </ul>
+                    <h3 class="text-lg font-bold text-purple-800 mb-3">
+                        <i class="fas fa-music text-purple-600 mr-2"></i>
+                        Thai Tone Reference
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+                        <div class="bg-white rounded p-3 text-center">
+                            <div class="text-2xl mb-1">🔵</div>
+                            <p class="font-semibold text-gray-800">Mid</p>
+                            <p class="text-gray-600 text-xs">Flat tone</p>
+                        </div>
+                        <div class="bg-white rounded p-3 text-center">
+                            <div class="text-2xl mb-1">🟢</div>
+                            <p class="font-semibold text-gray-800">Low</p>
+                            <p class="text-gray-600 text-xs">Low falling</p>
+                        </div>
+                        <div class="bg-white rounded p-3 text-center">
+                            <div class="text-2xl mb-1">🔴</div>
+                            <p class="font-semibold text-gray-800">Falling</p>
+                            <p class="text-gray-600 text-xs">Sharp drop</p>
+                        </div>
+                        <div class="bg-white rounded p-3 text-center">
+                            <div class="text-2xl mb-1">🟠</div>
+                            <p class="font-semibold text-gray-800">High</p>
+                            <p class="text-gray-600 text-xs">High level</p>
+                        </div>
+                        <div class="bg-white rounded p-3 text-center">
+                            <div class="text-2xl mb-1">🟣</div>
+                            <p class="font-semibold text-gray-800">Rising</p>
+                            <p class="text-gray-600 text-xs">Upward rise</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="dashboard-content"></div>
+            </div>
+
+            <!-- Entries Page -->
+            <div id="entries-page" class="hidden">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-list text-blue-600 mr-2"></i>
+                        Browse Entries
+                    </h2>
+                    <p class="text-gray-600">Search and manage your Thai vocabulary</p>
+                </div>
+                <div id="entries-content"></div>
+            </div>
+
+            <!-- Learn Page -->
+            <div id="learn-page" class="hidden">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-graduation-cap text-green-600 mr-2"></i>
+                        Learn New Items
+                    </h2>
+                    <p class="text-gray-600">Study new Thai vocabulary and phrases</p>
+                </div>
+                <div id="learn-content"></div>
+            </div>
+
+            <!-- Review Page -->
+            <div id="review-page" class="hidden">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-brain text-orange-600 mr-2"></i>
+                        Review Sessions
+                    </h2>
+                    <p class="text-gray-600">Reinforce your learning with spaced repetition</p>
+                </div>
+                <div id="review-content"></div>
+            </div>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="bg-white border-t border-gray-200 mt-12">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="text-center text-gray-600 text-sm">
+                    <p class="mb-2">Thai Learning Manager v${VERSION} • Built with Hono + Neon PostgreSQL + Cloudflare Pages</p>
+                    <p>CEFR-based spaced repetition • 5 Thai tones • Classifiers support</p>
                 </div>
             </div>
-        </div>
+        </footer>
+
+        <!-- Load Scripts -->
+        <script src="/static/app.js"></script>
     </body>
     </html>
   `)
