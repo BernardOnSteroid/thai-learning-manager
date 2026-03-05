@@ -416,7 +416,10 @@ function showLoading(elementId) {
 }
 
 function hideLoading(elementId) {
-  // Loading is replaced by actual content
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.innerHTML = ''; // Clear loading spinner
+  }
 }
 
 function showError(elementId, message) {
