@@ -62,15 +62,21 @@ async function loadDashboard() {
 }
 
 function renderStatsCards(stats, dashboardStats) {
-  document.getElementById('total-entries').textContent = stats.total_entries || 0;
-  document.getElementById('learning-progress').textContent = stats.learning_progress || 0;
-  document.getElementById('due-review').textContent = stats.due_for_review || 0;
+  // Safely update stats cards
+  const totalEntriesEl = document.getElementById('total-entries');
+  const learningProgressEl = document.getElementById('learning-progress');
+  const dueReviewEl = document.getElementById('due-review');
+  const progressPercentEl = document.getElementById('progress-percent');
+  
+  if (totalEntriesEl) totalEntriesEl.textContent = stats.total_entries || 0;
+  if (learningProgressEl) learningProgressEl.textContent = stats.learning_progress || 0;
+  if (dueReviewEl) dueReviewEl.textContent = stats.due_for_review || 0;
   
   // Calculate progress percentage
   const progressPercent = stats.total_entries > 0 
     ? Math.round((stats.learning_progress / stats.total_entries) * 100)
     : 0;
-  document.getElementById('progress-percent').textContent = progressPercent + '%';
+  if (progressPercentEl) progressPercentEl.textContent = progressPercent + '%';
   
   // Update progress bar
   const progressBar = document.getElementById('progress-bar');
@@ -79,10 +85,14 @@ function renderStatsCards(stats, dashboardStats) {
   }
   
   // Render state breakdown
-  if (dashboardStats.byState) {
-    document.getElementById('state-new').textContent = dashboardStats.byState.new || 0;
-    document.getElementById('state-learning').textContent = dashboardStats.byState.learning || 0;
-    document.getElementById('state-mastered').textContent = dashboardStats.byState.mastered || 0;
+  if (dashboardStats && dashboardStats.byState) {
+    const stateNewEl = document.getElementById('state-new');
+    const stateLearningEl = document.getElementById('state-learning');
+    const stateMasteredEl = document.getElementById('state-mastered');
+    
+    if (stateNewEl) stateNewEl.textContent = dashboardStats.byState.new || 0;
+    if (stateLearningEl) stateLearningEl.textContent = dashboardStats.byState.learning || 0;
+    if (stateMasteredEl) stateMasteredEl.textContent = dashboardStats.byState.mastered || 0;
   }
 }
 
@@ -134,8 +144,15 @@ function renderCEFRProgression(data) {
   
   // Show recommendation
   if (data.recommendation) {
-    document.getElementById('focus-level').textContent = data.recommendation.focus_level;
-    document.getElementById('focus-message').textContent = data.recommendation.message;
+    const focusLevelEl = document.getElementById('focus-level');
+    const focusMessageEl = document.getElementById('focus-message');
+    
+    if (focusLevelEl) {
+      focusLevelEl.textContent = data.recommendation.focus_level;
+    }
+    if (focusMessageEl) {
+      focusMessageEl.textContent = data.recommendation.message;
+    }
   }
 }
 
