@@ -928,6 +928,550 @@ async function loadLearnPage() {
   }
 }
 
+// ============ Learning & Review Functions ============
+
+let learningSession = {
+  items: [],
+  currentIndex: 0,
+  completed: []
+};
+
+let reviewSession = {
+  items: [],
+  currentIndex: 0,
+  completed: []
+};
+
+async function loadLearnPage() {
+  const container = document.getElementById('learn-content');
+  if (!container) return;
+  
+  showLoading('learn-content');
+  
+  try {
+    container.innerHTML = `
+      <div class="mb-6">
+        <!-- CEFR Level Selector -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+          <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-layer-group text-green-600 mr-2"></i>
+            Select Learning Level
+          </h3>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <button onclick="startLearningSession('A1')" class="p-4 border-2 border-green-300 hover:border-green-500 rounded-lg text-center transition-colors">
+              <div class="text-2xl font-bold text-green-600">A1</div>
+              <div class="text-sm text-gray-600">Breakthrough</div>
+            </button>
+            <button onclick="startLearningSession('A2')" class="p-4 border-2 border-blue-300 hover:border-blue-500 rounded-lg text-center transition-colors">
+              <div class="text-2xl font-bold text-blue-600">A2</div>
+              <div class="text-sm text-gray-600">Waystage</div>
+            </button>
+            <button onclick="startLearningSession('B1')" class="p-4 border-2 border-yellow-300 hover:border-yellow-500 rounded-lg text-center transition-colors">
+              <div class="text-2xl font-bold text-yellow-600">B1</div>
+              <div class="text-sm text-gray-600">Threshold</div>
+            </button>
+            <button onclick="startLearningSession('B2')" class="p-4 border-2 border-orange-300 hover:border-orange-500 rounded-lg text-center transition-colors">
+              <div class="text-2xl font-bold text-orange-600">B2</div>
+              <div class="text-sm text-gray-600">Vantage</div>
+            </button>
+            <button onclick="startLearningSession('C1')" class="p-4 border-2 border-red-300 hover:border-red-500 rounded-lg text-center transition-colors">
+              <div class="text-2xl font-bold text-red-600">C1</div>
+              <div class="text-sm text-gray-600">Proficiency</div>
+            </button>
+            <button onclick="startLearningSession('C2')" class="p-4 border-2 border-purple-300 hover:border-purple-500 rounded-lg text-center transition-colors">
+              <div class="text-2xl font-bold text-purple-600">C2</div>
+              <div class="text-sm text-gray-600">Mastery</div>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Learning Session Container -->
+        <div id="learning-session-container"></div>
+      </div>
+    `;
+    
+  } catch (error) {
+    showError('learn-content', 'Failed to load learning page: ' + error.message);
+  }
+}
+
+async function startLearningSession(cefrLevel) {
+  try {
+    showLoading('learning-session-container');
+    
+    // Fetch new items for this level
+    const items = await apiRequest(`/api/learning/new?cefr_level=${cefrLevel}&limit=10`);
+    
+    if (items.length === 0) {
+      document.getElementById('learning-session-container').innerHTML = `
+        <div class="bg-white rounded-lg shadow p-8 text-center">
+          <i class="fas fa-check-circle text-green-500 text-6xl mb-4"></i>
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">All Caught Up!</h3>
+          <p class="text-gray-600 mb-4">No new ${cefrLevel} items to learn right now.</p>
+          <button onclick="loadLearnPage()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+            <i class="fas fa-arrow-left mr-2"></i>Choose Another Level
+          </button>
+        </div>
+      `;
+      return;
+    }
+    
+    learningSession = {
+      items: items,
+      currentIndex: 0,
+      completed: []
+    };
+    
+    renderLearningCard();
+    
+  } catch (error) {
+    showError('learning-session-container', 'Failed to start learning session: ' + error.message);
+  }
+}
+
+function renderLearningCard() {
+  const container = document.getElementById('learning-session-container');
+  if (!container) return;
+  
+  const item = learningSession.items[learningSession.currentIndex];
+  const progress = learningSession.currentIndex + 1;
+  const total = learningSession.items.length;
+  
+  const toneEmojis = {
+    'mid': '🔵',
+    'low': '🟢',
+    'falling': '🔴',
+    'high': '🟠',
+    'rising': '🟣'
+  };
+  
+  container.innerHTML = `
+    <div class="bg-white rounded-lg shadow-lg p-8">
+      <!-- Progress Bar -->
+      <div class="mb-6">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-sm font-medium text-gray-600">Learning Progress</span>
+          <span class="text-sm font-medium text-gray-600">${progress} / ${total}</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: ${(progress / total) * 100}%"></div>
+        </div>
+      </div>
+      
+      <!-- Flashcard -->
+      <div id="flashcard" class="mb-8 relative" style="min-height: 300px;">
+        <div id="card-front" class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-8 text-center cursor-pointer border-2 border-green-200" onclick="flipCard()">
+          <div class="mb-4">
+            <span class="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
+            <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
+          </div>
+          <div class="text-6xl font-bold text-gray-800 thai-text mb-4">${item.thai_script}</div>
+          <div class="text-3xl text-gray-600 mb-2">${item.romanization}</div>
+          <div class="text-2xl mb-4">${toneEmojis[item.tone]} ${item.tone} tone</div>
+          <p class="text-gray-500 text-sm">Click to see meaning</p>
+        </div>
+        
+        <div id="card-back" class="hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-8 border-2 border-blue-200" onclick="flipCard()">
+          <div class="mb-4">
+            <span class="px-3 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
+            <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
+          </div>
+          <div class="text-4xl font-bold text-gray-800 thai-text mb-2">${item.thai_script}</div>
+          <div class="text-2xl text-gray-600 mb-4">${item.romanization}</div>
+          <div class="text-3xl font-bold text-blue-800 mb-4">${item.meaning}</div>
+          ${item.classifier ? `<p class="text-gray-700 mb-2"><strong>Classifier:</strong> <span class="thai-text text-xl">${item.classifier}</span></p>` : ''}
+          ${item.polite_form ? `<p class="text-gray-700 mb-2"><strong>Polite form:</strong> <span class="thai-text text-xl">${item.polite_form}</span></p>` : ''}
+          ${item.grammar_notes ? `<p class="text-gray-600 text-sm mt-4"><strong>Notes:</strong> ${item.grammar_notes}</p>` : ''}
+          ${item.examples && item.examples.length > 0 ? `
+            <div class="mt-4 text-left bg-white rounded-lg p-4">
+              <strong class="text-gray-700">Example:</strong>
+              <p class="thai-text text-xl text-gray-800 mt-2">${item.examples[0].thai}</p>
+              <p class="text-gray-600">${item.examples[0].romanization}</p>
+              <p class="text-gray-600">${item.examples[0].english}</p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+      
+      <!-- Action Buttons -->
+      <div class="flex justify-center space-x-4">
+        <button onclick="markAsLearned()" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold inline-flex items-center">
+          <i class="fas fa-check mr-2"></i>Got It! Next
+        </button>
+        <button onclick="skipItem()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold">
+          <i class="fas fa-forward mr-2"></i>Skip
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function flipCard() {
+  const front = document.getElementById('card-front');
+  const back = document.getElementById('card-back');
+  
+  if (front && back) {
+    front.classList.toggle('hidden');
+    back.classList.toggle('hidden');
+  }
+}
+
+async function markAsLearned() {
+  const item = learningSession.items[learningSession.currentIndex];
+  
+  try {
+    // Start learning this item (create progress record)
+    await apiRequest('/api/learning/start', {
+      method: 'POST',
+      body: JSON.stringify({ entry_id: item.id })
+    });
+    
+    learningSession.completed.push(item.id);
+    
+    // Move to next item or finish
+    learningSession.currentIndex++;
+    
+    if (learningSession.currentIndex < learningSession.items.length) {
+      renderLearningCard();
+    } else {
+      showLearningComplete();
+    }
+    
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+
+function skipItem() {
+  learningSession.currentIndex++;
+  
+  if (learningSession.currentIndex < learningSession.items.length) {
+    renderLearningCard();
+  } else {
+    showLearningComplete();
+  }
+}
+
+function showLearningComplete() {
+  const container = document.getElementById('learning-session-container');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="bg-white rounded-lg shadow-lg p-8 text-center">
+      <i class="fas fa-trophy text-yellow-500 text-6xl mb-4"></i>
+      <h3 class="text-3xl font-bold text-gray-800 mb-2">Session Complete!</h3>
+      <p class="text-xl text-gray-600 mb-6">You learned ${learningSession.completed.length} new items</p>
+      
+      <div class="flex justify-center space-x-4">
+        <button onclick="loadDashboard(); showPage('dashboard')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+          <i class="fas fa-chart-line mr-2"></i>View Dashboard
+        </button>
+        <button onclick="loadLearnPage()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg">
+          <i class="fas fa-redo mr-2"></i>Learn More
+        </button>
+      </div>
+    </div>
+  `;
+  
+  // Refresh dashboard stats
+  if (currentPage === 'dashboard') {
+    loadDashboard();
+  }
+}
+
+// ============ Review Session Functions ============
+
+async function loadReviewPage() {
+  const container = document.getElementById('review-content');
+  if (!container) return;
+  
+  showLoading('review-content');
+  
+  try {
+    // Get due items count
+    const stats = await apiRequest('/api/revision/stats');
+    const dueCount = stats.due_for_review || 0;
+    
+    container.innerHTML = `
+      <div class="mb-6">
+        <!-- Review Stats Card -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-2xl font-bold text-gray-800 mb-2">
+                <i class="fas fa-brain text-orange-600 mr-2"></i>
+                Items Due for Review
+              </h3>
+              <p class="text-gray-600">Reinforce your learning with spaced repetition</p>
+            </div>
+            <div class="text-center">
+              <div class="text-5xl font-bold text-orange-600">${dueCount}</div>
+              <div class="text-sm text-gray-600 mt-1">due now</div>
+            </div>
+          </div>
+          
+          ${dueCount > 0 ? `
+            <button onclick="startReviewSession()" class="mt-6 w-full bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg font-semibold inline-flex items-center justify-center">
+              <i class="fas fa-play mr-2"></i>Start Review Session
+            </button>
+          ` : `
+            <div class="mt-6 bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <i class="fas fa-check-circle text-green-600 text-3xl mb-2"></i>
+              <p class="text-green-800 font-semibold">You're all caught up!</p>
+              <p class="text-green-700 text-sm mt-1">No reviews due right now. Come back later!</p>
+            </div>
+          `}
+        </div>
+        
+        <!-- Review Tips -->
+        <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg shadow p-6">
+          <h4 class="text-lg font-semibold text-orange-800 mb-3">
+            <i class="fas fa-lightbulb text-orange-600 mr-2"></i>
+            Review Tips
+          </h4>
+          <ul class="space-y-2 text-orange-800">
+            <li class="flex items-start">
+              <i class="fas fa-check text-orange-600 mr-2 mt-1"></i>
+              <span>Rate honestly - it helps the algorithm optimize your learning</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fas fa-check text-orange-600 mr-2 mt-1"></i>
+              <span>0-2 = Failed recall (item resets to beginning)</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fas fa-check text-orange-600 mr-2 mt-1"></i>
+              <span>3-5 = Successful recall (increases review interval)</span>
+            </li>
+            <li class="flex items-start">
+              <i class="fas fa-check text-orange-600 mr-2 mt-1"></i>
+              <span>5 = Perfect recall (maximum interval increase)</span>
+            </li>
+          </ul>
+        </div>
+        
+        <!-- Review Session Container -->
+        <div id="review-session-container" class="mt-6"></div>
+      </div>
+    `;
+    
+  } catch (error) {
+    showError('review-content', 'Failed to load review page: ' + error.message);
+  }
+}
+
+async function startReviewSession() {
+  try {
+    showLoading('review-session-container');
+    
+    // Fetch due items
+    const items = await apiRequest('/api/revision/due?limit=20');
+    
+    if (items.length === 0) {
+      document.getElementById('review-session-container').innerHTML = `
+        <div class="bg-white rounded-lg shadow p-8 text-center">
+          <i class="fas fa-check-circle text-green-500 text-6xl mb-4"></i>
+          <h3 class="text-2xl font-bold text-gray-800 mb-2">No Reviews Due!</h3>
+          <p class="text-gray-600">Come back later for more reviews.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    reviewSession = {
+      items: items,
+      currentIndex: 0,
+      completed: []
+    };
+    
+    renderReviewCard();
+    
+  } catch (error) {
+    showError('review-session-container', 'Failed to start review session: ' + error.message);
+  }
+}
+
+function renderReviewCard() {
+  const container = document.getElementById('review-session-container');
+  if (!container) return;
+  
+  const item = reviewSession.items[reviewSession.currentIndex];
+  const progress = reviewSession.currentIndex + 1;
+  const total = reviewSession.items.length;
+  
+  const toneEmojis = {
+    'mid': '🔵',
+    'low': '🟢',
+    'falling': '🔴',
+    'high': '🟠',
+    'rising': '🟣'
+  };
+  
+  container.innerHTML = `
+    <div class="bg-white rounded-lg shadow-lg p-8">
+      <!-- Progress Bar -->
+      <div class="mb-6">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-sm font-medium text-gray-600">Review Progress</span>
+          <span class="text-sm font-medium text-gray-600">${progress} / ${total}</span>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2">
+          <div class="bg-orange-600 h-2 rounded-full transition-all duration-300" style="width: ${(progress / total) * 100}%"></div>
+        </div>
+      </div>
+      
+      <!-- Question Card -->
+      <div id="review-flashcard" class="mb-8">
+        <div id="review-front" class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-8 text-center cursor-pointer border-2 border-orange-200" onclick="flipReviewCard()">
+          <div class="mb-4">
+            <span class="px-3 py-1 bg-orange-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
+            <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
+          </div>
+          <div class="text-6xl font-bold text-gray-800 thai-text mb-4">${item.thai_script}</div>
+          <div class="text-3xl text-gray-600">${item.romanization}</div>
+          <p class="text-gray-500 text-sm mt-6">Try to recall the meaning, then click to check</p>
+        </div>
+        
+        <div id="review-back" class="hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-8 border-2 border-blue-200">
+          <div class="mb-4">
+            <span class="px-3 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
+            <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
+          </div>
+          <div class="text-4xl font-bold text-gray-800 thai-text mb-2">${item.thai_script}</div>
+          <div class="text-2xl text-gray-600 mb-4">${item.romanization}</div>
+          <div class="text-3xl font-bold text-blue-800 mb-4">${item.meaning}</div>
+          <div class="text-xl mb-4">${toneEmojis[item.tone]} ${item.tone} tone</div>
+          ${item.classifier ? `<p class="text-gray-700 mb-2"><strong>Classifier:</strong> <span class="thai-text text-xl">${item.classifier}</span></p>` : ''}
+          ${item.grammar_notes ? `<p class="text-gray-600 text-sm mt-4">${item.grammar_notes}</p>` : ''}
+          
+          <!-- Rating Buttons -->
+          <div class="mt-6">
+            <p class="text-sm font-semibold text-gray-700 mb-3 text-center">How well did you recall this?</p>
+            <div class="grid grid-cols-6 gap-2">
+              <button onclick="submitRating(0)" class="p-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-colors">
+                0
+                <div class="text-xs mt-1">Fail</div>
+              </button>
+              <button onclick="submitRating(1)" class="p-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-bold transition-colors">
+                1
+                <div class="text-xs mt-1">Hard</div>
+              </button>
+              <button onclick="submitRating(2)" class="p-3 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-bold transition-colors">
+                2
+                <div class="text-xs mt-1">Poor</div>
+              </button>
+              <button onclick="submitRating(3)" class="p-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-bold transition-colors">
+                3
+                <div class="text-xs mt-1">OK</div>
+              </button>
+              <button onclick="submitRating(4)" class="p-3 bg-green-500 hover:bg-green-600 text-white rounded-lg font-bold transition-colors">
+                4
+                <div class="text-xs mt-1">Good</div>
+              </button>
+              <button onclick="submitRating(5)" class="p-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold transition-colors">
+                5
+                <div class="text-xs mt-1">Perfect</div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function flipReviewCard() {
+  const front = document.getElementById('review-front');
+  const back = document.getElementById('review-back');
+  
+  if (front && back) {
+    front.classList.toggle('hidden');
+    back.classList.toggle('hidden');
+  }
+}
+
+async function submitRating(quality) {
+  const item = reviewSession.items[reviewSession.currentIndex];
+  
+  try {
+    // Submit review rating
+    const result = await apiRequest('/api/revision/submit', {
+      method: 'POST',
+      body: JSON.stringify({
+        entry_id: item.id,
+        quality: quality
+      })
+    });
+    
+    reviewSession.completed.push({
+      id: item.id,
+      quality: quality,
+      next_review: result.next_review
+    });
+    
+    // Move to next item or finish
+    reviewSession.currentIndex++;
+    
+    if (reviewSession.currentIndex < reviewSession.items.length) {
+      renderReviewCard();
+    } else {
+      showReviewComplete();
+    }
+    
+  } catch (error) {
+    alert('Error: ' + error.message);
+  }
+}
+
+function showReviewComplete() {
+  const container = document.getElementById('review-session-container');
+  if (!container) return;
+  
+  const avgQuality = reviewSession.completed.reduce((sum, item) => sum + item.quality, 0) / reviewSession.completed.length;
+  const passed = reviewSession.completed.filter(item => item.quality >= 3).length;
+  const failed = reviewSession.completed.filter(item => item.quality < 3).length;
+  
+  container.innerHTML = `
+    <div class="bg-white rounded-lg shadow-lg p-8 text-center">
+      <i class="fas fa-star text-yellow-500 text-6xl mb-4"></i>
+      <h3 class="text-3xl font-bold text-gray-800 mb-4">Review Complete!</h3>
+      
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-blue-50 rounded-lg p-4">
+          <div class="text-3xl font-bold text-blue-600">${reviewSession.completed.length}</div>
+          <div class="text-sm text-gray-600">Reviewed</div>
+        </div>
+        <div class="bg-green-50 rounded-lg p-4">
+          <div class="text-3xl font-bold text-green-600">${passed}</div>
+          <div class="text-sm text-gray-600">Passed</div>
+        </div>
+        <div class="bg-red-50 rounded-lg p-4">
+          <div class="text-3xl font-bold text-red-600">${failed}</div>
+          <div class="text-sm text-gray-600">Failed</div>
+        </div>
+      </div>
+      
+      <div class="bg-purple-50 rounded-lg p-4 mb-6">
+        <div class="text-2xl font-bold text-purple-600">${avgQuality.toFixed(1)}/5</div>
+        <div class="text-sm text-gray-600">Average Rating</div>
+      </div>
+      
+      <div class="flex justify-center space-x-4">
+        <button onclick="loadDashboard(); showPage('dashboard')" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+          <i class="fas fa-chart-line mr-2"></i>View Dashboard
+        </button>
+        <button onclick="loadReviewPage()" class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg">
+          <i class="fas fa-redo mr-2"></i>Review More
+        </button>
+      </div>
+    </div>
+  `;
+  
+  // Refresh dashboard stats
+  if (currentPage === 'dashboard') {
+    loadDashboard();
+  }
+}
+
 async function loadReviewPage() {
   const container = document.getElementById('review-content');
   if (container) {
