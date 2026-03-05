@@ -1,8 +1,11 @@
 // Thai Learning Manager - Database Helper Functions
-// Version: 1.0.0-thai
+// Version: 1.0.0-thai (Fixed for Neon serverless with sql.query)
 // Database: Neon PostgreSQL with CEFR levels and Thai tones
 
-import { neon } from '@neondatabase/serverless';
+import { neon, neonConfig } from '@neondatabase/serverless';
+
+// Enable fullResults mode for .query() method
+neonConfig.fullResults = false;
 
 // ============ TypeScript Interfaces ============
 
@@ -33,8 +36,8 @@ export interface LearningProgress {
   srs_level: number;
   ease_factor: number;
   interval: number;
-  next_review?: string;
-  last_reviewed?: string;
+  next_review: Date;
+  last_reviewed?: Date | null;
   correct_count: number;
   incorrect_count: number;
   created_at?: string;
@@ -54,7 +57,7 @@ export function getDbClient(databaseUrl: string) {
   return neon(databaseUrl);
 }
 
-// ============ Entry CRUD Operations ============
+// ============ Entry Management ============
 
 export async function getEntries(
   databaseUrl: string,
@@ -68,85 +71,53 @@ export async function getEntries(
 ): Promise<ThaiEntry[]> {
   const sql = getDbClient(databaseUrl);
   
-  let query = 'SELECT * FROM entries WHERE 1=1';
-  const params: any[] = [];
-  let paramCount = 1;
-
+  // Build query with conditions
+  let query = 'SELECT * FROM entries WHERE archived = ' + (filters?.archived !== undefined ? filters.archived : 'false');
+  
   if (filters?.cefr_level) {
-    query += ` AND cefr_level = $${paramCount}`;
-    params.push(filters.cefr_level);
-    paramCount++;
+    query += ` AND cefr_level = '${filters.cefr_level}'`;
   }
-
   if (filters?.entry_type) {
-    query += ` AND entry_type = $${paramCount}`;
-    params.push(filters.entry_type);
-    paramCount++;
+    query += ` AND entry_type = '${filters.entry_type}'`;
   }
-
   if (filters?.tone) {
-    query += ` AND tone = $${paramCount}`;
-    params.push(filters.tone);
-    paramCount++;
+    query += ` AND tone = '${filters.tone}'`;
   }
-
-  if (filters?.archived !== undefined) {
-    query += ` AND archived = $${paramCount}`;
-    params.push(filters.archived);
-    paramCount++;
-  }
-
+  
   query += ' ORDER BY created_at DESC';
-
+  
   if (filters?.limit) {
-    query += ` LIMIT $${paramCount}`;
-    params.push(filters.limit);
-  } else {
-    query += ' LIMIT 100';
+    query += ` LIMIT ${filters.limit}`;
   }
-
-  const result = await sql.query(query, params);
-  return result.rows;
+  
+  // Execute raw SQL query using neon() function
+  const entries = await sql(query);
+  return entries as ThaiEntry[];
 }
 
-export async function getEntryById(
-  databaseUrl: string,
-  id: string
-): Promise<ThaiEntry | null> {
+export async function getEntryById(databaseUrl: string, id: string): Promise<ThaiEntry | null> {
   const sql = getDbClient(databaseUrl);
-  const result = await sql.query('SELECT * FROM entries WHERE id = $1', [id]);
-  return result.rows[0] || null;
+  const result = await sql`SELECT * FROM entries WHERE id = ${id}`;
+  return result[0] || null;
 }
 
-export async function createEntry(
-  databaseUrl: string,
-  entry: ThaiEntry
-): Promise<ThaiEntry> {
+export async function createEntry(databaseUrl: string, entry: Omit<ThaiEntry, 'id'>): Promise<ThaiEntry> {
   const sql = getDbClient(databaseUrl);
   
-  const result = await sql.query(
-    `INSERT INTO entries (
+  const result = await sql`
+    INSERT INTO entries (
       thai_script, romanization, tone, meaning, entry_type, cefr_level,
       difficulty, examples, grammar_notes, classifier, polite_form, archived
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-    RETURNING *`,
-    [
-      entry.thai_script,
-      entry.romanization,
-      entry.tone,
-      entry.meaning,
-      entry.entry_type,
-      entry.cefr_level,
-      entry.difficulty || null,
-      JSON.stringify(entry.examples || []),
-      entry.grammar_notes || null,
-      entry.classifier || null,
-      entry.polite_form || null,
-      entry.archived || false
-    ]
-  );
+    ) VALUES (
+      ${entry.thai_script}, ${entry.romanization}, ${entry.tone}, ${entry.meaning},
+      ${entry.entry_type}, ${entry.cefr_level}, ${entry.difficulty || 3},
+      ${JSON.stringify(entry.examples || [])}, ${entry.grammar_notes || ''},
+      ${entry.classifier || ''}, ${entry.polite_form || ''}, ${entry.archived || false}
+    )
+    RETURNING *
+  `;
   
-  return result.rows[0];
+  return result[0];
 }
 
 export async function updateEntry(
@@ -156,125 +127,86 @@ export async function updateEntry(
 ): Promise<ThaiEntry> {
   const sql = getDbClient(databaseUrl);
   
-  const fields: string[] = [];
-  const params: any[] = [];
-  let paramCount = 1;
-
-  const allowedFields = [
-    'thai_script', 'romanization', 'tone', 'meaning', 'entry_type', 'cefr_level',
-    'difficulty', 'examples', 'grammar_notes', 'classifier', 'polite_form', 'archived'
-  ];
-
-  for (const [key, value] of Object.entries(updates)) {
-    if (allowedFields.includes(key)) {
-      fields.push(`${key} = $${paramCount}`);
-      params.push(key === 'examples' ? JSON.stringify(value) : value);
-      paramCount++;
-    }
-  }
-
-  if (fields.length === 0) {
-    throw new Error('No valid fields to update');
-  }
-
-  params.push(id);
-  const query = `UPDATE entries SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+  // Build SET clause dynamically
+  const setClauses: string[] = [];
+  if (updates.thai_script !== undefined) setClauses.push(`thai_script = '${updates.thai_script}'`);
+  if (updates.romanization !== undefined) setClauses.push(`romanization = '${updates.romanization}'`);
+  if (updates.tone !== undefined) setClauses.push(`tone = '${updates.tone}'`);
+  if (updates.meaning !== undefined) setClauses.push(`meaning = '${updates.meaning}'`);
+  if (updates.entry_type !== undefined) setClauses.push(`entry_type = '${updates.entry_type}'`);
+  if (updates.cefr_level !== undefined) setClauses.push(`cefr_level = '${updates.cefr_level}'`);
+  if (updates.difficulty !== undefined) setClauses.push(`difficulty = ${updates.difficulty}`);
+  if (updates.examples !== undefined) setClauses.push(`examples = '${JSON.stringify(updates.examples)}'::jsonb`);
+  if (updates.grammar_notes !== undefined) setClauses.push(`grammar_notes = '${updates.grammar_notes}'`);
+  if (updates.classifier !== undefined) setClauses.push(`classifier = '${updates.classifier}'`);
+  if (updates.polite_form !== undefined) setClauses.push(`polite_form = '${updates.polite_form}'`);
+  if (updates.archived !== undefined) setClauses.push(`archived = ${updates.archived}`);
   
-  const result = await sql.query(query, params);
-  return result.rows[0];
+  const setClause = setClauses.join(', ');
+  
+  const result = await sql(`UPDATE entries SET ${setClause} WHERE id = '${id}' RETURNING *`);
+  return result[0];
 }
 
-export async function deleteEntry(
-  databaseUrl: string,
-  id: string
-): Promise<void> {
+export async function deleteEntry(databaseUrl: string, id: string): Promise<void> {
   const sql = getDbClient(databaseUrl);
-  
-  // Delete learning progress first (cascade will handle it, but explicit is better)
-  await sql.query('DELETE FROM learning_progress WHERE entry_id = $1', [id]);
-  await sql.query('DELETE FROM entries WHERE id = $1', [id]);
+  await sql`DELETE FROM learning_progress WHERE entry_id = ${id}`;
+  await sql`DELETE FROM entries WHERE id = ${id}`;
 }
 
-export async function archiveEntry(
-  databaseUrl: string,
-  id: string,
-  archived: boolean
-): Promise<ThaiEntry> {
+export async function archiveEntry(databaseUrl: string, id: string, archived: boolean): Promise<ThaiEntry> {
   const sql = getDbClient(databaseUrl);
-  const result = await sql.query(
-    'UPDATE entries SET archived = $1 WHERE id = $2 RETURNING *',
-    [archived, id]
-  );
-  return result.rows[0];
+  const result = await sql`UPDATE entries SET archived = ${archived} WHERE id = ${id} RETURNING *`;
+  return result[0];
 }
 
-// ============ Learning Progress Operations ============
+// ============ Learning Progress Management ============
 
-export async function getLearningProgress(
-  databaseUrl: string,
-  entryId: string
-): Promise<LearningProgress | null> {
+export async function getLearningProgress(databaseUrl: string, entryId: string): Promise<LearningProgress | null> {
   const sql = getDbClient(databaseUrl);
-  const result = await sql.query(
-    'SELECT * FROM learning_progress WHERE entry_id = $1',
-    [entryId]
-  );
-  return result.rows[0] || null;
+  const result = await sql`SELECT * FROM learning_progress WHERE entry_id = ${entryId}`;
+  return result[0] || null;
 }
 
-export async function createLearningProgress(
-  databaseUrl: string,
-  entryId: string
-): Promise<LearningProgress> {
+export async function createLearningProgress(databaseUrl: string, entryId: string): Promise<LearningProgress> {
   const sql = getDbClient(databaseUrl);
   
-  const result = await sql.query(
-    `INSERT INTO learning_progress (
-      entry_id, srs_level, ease_factor, interval, correct_count, incorrect_count
-    ) VALUES ($1, 0, 2.5, 0, 0, 0)
-    RETURNING *`,
-    [entryId]
-  );
+  const nextReview = new Date();
+  nextReview.setDate(nextReview.getDate() + 1); // Next review in 1 day
   
-  return result.rows[0];
+  const result = await sql`
+    INSERT INTO learning_progress (
+      entry_id, srs_level, ease_factor, interval, next_review,
+      correct_count, incorrect_count
+    ) VALUES (
+      ${entryId}, 0, 2.5, 1, ${nextReview.toISOString()}, 0, 0
+    )
+    RETURNING *
+  `;
+  
+  return result[0];
 }
 
 export async function updateLearningProgress(
   databaseUrl: string,
   entryId: string,
-  updates: {
-    srs_level?: number;
-    ease_factor?: number;
-    interval?: number;
-    next_review?: Date;
-    last_reviewed?: Date;
-    correct_count?: number;
-    incorrect_count?: number;
-  }
+  updates: Partial<LearningProgress>
 ): Promise<LearningProgress> {
   const sql = getDbClient(databaseUrl);
   
-  const fields: string[] = [];
-  const params: any[] = [];
-  let paramCount = 1;
-
-  for (const [key, value] of Object.entries(updates)) {
-    if (value !== undefined) {
-      fields.push(`${key} = $${paramCount}`);
-      params.push(value);
-      paramCount++;
-    }
-  }
-
-  if (fields.length === 0) {
-    throw new Error('No valid fields to update');
-  }
-
-  params.push(entryId);
-  const query = `UPDATE learning_progress SET ${fields.join(', ')} WHERE entry_id = $${paramCount} RETURNING *`;
+  const setClauses: string[] = [];
+  if (updates.srs_level !== undefined) setClauses.push(`srs_level = ${updates.srs_level}`);
+  if (updates.ease_factor !== undefined) setClauses.push(`ease_factor = ${updates.ease_factor}`);
+  if (updates.interval !== undefined) setClauses.push(`interval = ${updates.interval}`);
+  if (updates.next_review !== undefined) setClauses.push(`next_review = '${updates.next_review.toISOString()}'`);
+  if (updates.last_reviewed !== undefined) setClauses.push(`last_reviewed = '${updates.last_reviewed.toISOString()}'`);
+  if (updates.correct_count !== undefined) setClauses.push(`correct_count = ${updates.correct_count}`);
+  if (updates.incorrect_count !== undefined) setClauses.push(`incorrect_count = ${updates.incorrect_count}`);
   
-  const result = await sql.query(query, params);
-  return result.rows[0];
+  const setClause = setClauses.join(', ');
+  
+  const result = await sql(`UPDATE learning_progress SET ${setClause} WHERE entry_id = '${entryId}' RETURNING *`);
+  return result[0];
 }
 
 export async function getDueForReview(
@@ -283,29 +215,18 @@ export async function getDueForReview(
 ): Promise<Array<ThaiEntry & { progress: LearningProgress }>> {
   const sql = getDbClient(databaseUrl);
   
-  const result = await sql.query(
-    `SELECT 
-      e.*,
-      jsonb_build_object(
-        'id', lp.id,
-        'srs_level', lp.srs_level,
-        'ease_factor', lp.ease_factor,
-        'interval', lp.interval,
-        'next_review', lp.next_review,
-        'last_reviewed', lp.last_reviewed,
-        'correct_count', lp.correct_count,
-        'incorrect_count', lp.incorrect_count
-      ) as progress
+  const result = await sql`
+    SELECT e.*, lp.*,
+      e.id as entry_id, lp.id as progress_id
     FROM entries e
     INNER JOIN learning_progress lp ON e.id = lp.entry_id
-    WHERE e.archived = false
-      AND lp.next_review <= NOW()
-    ORDER BY lp.next_review ASC, e.difficulty ASC
-    LIMIT $1`,
-    [limit]
-  );
+    WHERE lp.next_review <= NOW()
+      AND e.archived = false
+    ORDER BY lp.next_review ASC
+    LIMIT ${limit}
+  `;
   
-  return result.rows;
+  return result as any[];
 }
 
 // ============ Statistics Functions ============
@@ -328,18 +249,18 @@ export async function getDashboardStats(databaseUrl: string) {
   const sql = getDbClient(databaseUrl);
   
   // Get all entries
-  const entries = await sql.query('SELECT * FROM entries WHERE archived = false');
-  const archivedCount = await sql.query('SELECT COUNT(*) as count FROM entries WHERE archived = true');
+  const entries = await sql`SELECT * FROM entries WHERE archived = false`;
+  const archivedCount = await sql`SELECT COUNT(*) as count FROM entries WHERE archived = true`;
   
   // Get learning progress
-  const progress = await sql.query('SELECT * FROM learning_progress');
+  const progress = await sql`SELECT * FROM learning_progress`;
   
   // Calculate stats
   const byType: Record<string, number> = {};
   const byCefr: Record<string, number> = {};
   const byTone: Record<string, number> = {};
   
-  entries.rows.forEach((entry: any) => {
+  entries.forEach((entry: any) => {
     byType[entry.entry_type] = (byType[entry.entry_type] || 0) + 1;
     byCefr[entry.cefr_level] = (byCefr[entry.cefr_level] || 0) + 1;
     byTone[entry.tone] = (byTone[entry.tone] || 0) + 1;
@@ -347,39 +268,39 @@ export async function getDashboardStats(databaseUrl: string) {
   
   // Learning states
   const byState = {
-    new: entries.rows.length - progress.rows.length,
-    learning: progress.rows.filter((p: any) => p.srs_level < 4).length,
-    mastered: progress.rows.filter((p: any) => p.srs_level >= 4).length
+    new: entries.length - progress.length,
+    learning: progress.filter((p: any) => p.srs_level < 4).length,
+    mastered: progress.filter((p: any) => p.srs_level >= 4).length
   };
   
   return {
-    totalEntries: entries.rows.length,
-    archivedEntries: parseInt(archivedCount.rows[0].count),
+    totalEntries: entries.length,
+    archivedEntries: archivedCount[0]?.count ? parseInt(archivedCount[0].count) : 0,
     byType,
     byCefr,
     byTone,
     byState,
-    totalLearning: progress.rows.length
+    totalLearning: progress.length
   };
 }
 
-export async function getCEFRProgression(databaseUrl: string) {
+export async function getCEFRProgression(databaseUrl: string): Promise<Record<string, any>> {
   const sql = getDbClient(databaseUrl);
   
-  const entries = await sql.query('SELECT cefr_level FROM entries WHERE archived = false');
-  const progress = await sql.query(
-    `SELECT e.cefr_level, lp.srs_level
+  const entries = await sql`SELECT cefr_level FROM entries WHERE archived = false`;
+  const progress = await sql`
+    SELECT e.cefr_level, lp.srs_level
     FROM entries e
     INNER JOIN learning_progress lp ON e.id = lp.entry_id
-    WHERE e.archived = false`
-  );
+    WHERE e.archived = false
+  `;
   
   const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const result: Record<string, any> = {};
   
-  // Ensure rows arrays exist
-  const entryRows = entries.rows || [];
-  const progressRows = progress.rows || [];
+  // Use arrays directly
+  const entryRows = entries || [];
+  const progressRows = progress || [];
   
   levels.forEach(level => {
     const totalInLevel = entryRows.filter((e: any) => e.cefr_level === level).length;
@@ -404,10 +325,10 @@ export async function getSettings(
   userId: string = 'default_user'
 ): Promise<Record<string, string>> {
   const sql = getDbClient(databaseUrl);
-  const result = await sql.query('SELECT key, value FROM settings WHERE user_id = $1', [userId]);
+  const result = await sql`SELECT key, value FROM settings WHERE user_id = ${userId}`;
   
   const settings: Record<string, string> = {};
-  result.rows.forEach((row: any) => {
+  result.forEach((row: any) => {
     settings[row.key] = row.value;
   });
   
@@ -422,11 +343,10 @@ export async function updateSettings(
 ): Promise<void> {
   const sql = getDbClient(databaseUrl);
   
-  await sql.query(
-    `INSERT INTO settings (user_id, key, value)
-    VALUES ($1, $2, $3)
+  await sql`
+    INSERT INTO settings (user_id, key, value)
+    VALUES (${userId}, ${key}, ${value})
     ON CONFLICT (user_id, key)
-    DO UPDATE SET value = $3`,
-    [userId, key, value]
-  );
+    DO UPDATE SET value = ${value}
+  `;
 }
