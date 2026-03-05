@@ -434,10 +434,15 @@ async function loadEntriesPage() {
     // Render filter controls and create button
     container.innerHTML = `
       <div class="mb-6">
-        <!-- Create Entry Button -->
-        <button onclick="showCreateEntryForm()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold mb-6 inline-flex items-center">
-          <i class="fas fa-plus mr-2"></i>Create New Entry
-        </button>
+        <!-- Create Entry Buttons -->
+        <div class="flex gap-3 mb-6">
+          <button onclick="showCreateEntryForm()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold inline-flex items-center">
+            <i class="fas fa-plus mr-2"></i>Create New Entry
+          </button>
+          <button onclick="showAIGenerationForm()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold inline-flex items-center">
+            <i class="fas fa-robot mr-2"></i>AI Generate
+          </button>
+        </div>
         
         <!-- Filter Controls -->
         <div class="bg-white rounded-lg shadow p-6 mb-6">
@@ -1517,3 +1522,253 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load initial page
   showPage('dashboard');
 });
+
+// ============ AI Generation Functions ============
+
+function showAIGenerationForm() {
+  const modal = document.createElement('div');
+  modal.id = 'ai-modal';
+  modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
+  
+  modal.innerHTML = `
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-2xl font-bold text-gray-800">
+            <i class="fas fa-robot text-purple-600 mr-2"></i>AI Entry Generator
+          </h2>
+          <button onclick="closeAIModal()" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-2xl"></i>
+          </button>
+        </div>
+        
+        <div class="space-y-4">
+          <!-- Prompt -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              What would you like to generate? <span class="text-red-500">*</span>
+            </label>
+            <textarea 
+              id="ai-prompt" 
+              rows="3" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              placeholder="e.g., Thai words for fruits, common verbs for shopping, greetings for tourists..."
+              required
+            ></textarea>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- CEFR Level -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">CEFR Level</label>
+              <select id="ai-cefr" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                <option value="A1">A1 - Beginner</option>
+                <option value="A2">A2 - Elementary</option>
+                <option value="B1">B1 - Intermediate</option>
+                <option value="B2">B2 - Upper Intermediate</option>
+                <option value="C1">C1 - Advanced</option>
+                <option value="C2">C2 - Proficiency</option>
+              </select>
+            </div>
+            
+            <!-- Entry Type -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Entry Type</label>
+              <select id="ai-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500">
+                <option value="word">Word</option>
+                <option value="verb">Verb</option>
+                <option value="phrase">Phrase</option>
+                <option value="classifier">Classifier</option>
+                <option value="particle">Particle</option>
+              </select>
+            </div>
+            
+            <!-- Count -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Count</label>
+              <input 
+                type="number" 
+                id="ai-count" 
+                min="1" 
+                max="10" 
+                value="3" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+          
+          <!-- Generated Results -->
+          <div id="ai-results" class="hidden">
+            <div class="border-t pt-4 mt-4">
+              <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                <i class="fas fa-check-circle text-green-600 mr-2"></i>Generated Entries
+              </h3>
+              <div id="ai-entries-list" class="space-y-3"></div>
+            </div>
+          </div>
+          
+          <div class="flex gap-3 mt-6">
+            <button 
+              onclick="generateAIEntries()" 
+              id="ai-generate-btn"
+              class="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold"
+            >
+              <i class="fas fa-magic mr-2"></i>Generate with AI
+            </button>
+            <button 
+              onclick="closeAIModal()" 
+              class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(modal);
+  document.getElementById('ai-prompt').focus();
+}
+
+async function generateAIEntries() {
+  const prompt = document.getElementById('ai-prompt').value.trim();
+  const cefr_level = document.getElementById('ai-cefr').value;
+  const entry_type = document.getElementById('ai-type').value;
+  const count = parseInt(document.getElementById('ai-count').value);
+  
+  if (!prompt) {
+    showError('Please enter a prompt for what you want to generate');
+    return;
+  }
+  
+  const btn = document.getElementById('ai-generate-btn');
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Generating...';
+  btn.disabled = true;
+  
+  try {
+    const response = await fetch('/api/ai/generate-entry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, cefr_level, entry_type, count })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to generate entries');
+    }
+    
+    // Display results
+    displayAIResults(data.entries);
+    
+  } catch (error) {
+    console.error('AI Generation error:', error);
+    showError('Failed to generate entries: ' + error.message);
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+}
+
+function displayAIResults(entries) {
+  const resultsDiv = document.getElementById('ai-results');
+  const listDiv = document.getElementById('ai-entries-list');
+  
+  resultsDiv.classList.remove('hidden');
+  listDiv.innerHTML = '';
+  
+  entries.forEach((item, index) => {
+    const entry = item.entry;
+    const validation = item.validation;
+    
+    const entryCard = document.createElement('div');
+    entryCard.className = `p-4 border rounded-lg ${validation.valid ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`;
+    
+    entryCard.innerHTML = `
+      <div class="flex justify-between items-start">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="text-2xl thai-text">${entry.thai_script}</span>
+            <span class="text-gray-600">(${entry.romanization})</span>
+            <span class="badge-${entry.tone}">${getToneEmoji(entry.tone)} ${entry.tone}</span>
+            <span class="badge-${entry.entry_type}">${entry.entry_type}</span>
+            <span class="badge-${entry.cefr_level}">${entry.cefr_level}</span>
+          </div>
+          <p class="text-gray-700 mb-2"><strong>Meaning:</strong> ${entry.meaning}</p>
+          ${entry.grammar_notes ? `<p class="text-sm text-gray-600 mb-2">${entry.grammar_notes}</p>` : ''}
+          ${validation.valid ? '' : `<p class="text-red-600 text-sm"><i class="fas fa-exclamation-triangle mr-1"></i>${validation.errors.join(', ')}</p>`}
+        </div>
+        <button 
+          onclick="saveAIEntry(${index})" 
+          class="ml-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm"
+          ${!validation.valid ? 'disabled' : ''}
+        >
+          <i class="fas fa-save mr-1"></i>Save
+        </button>
+      </div>
+    `;
+    
+    listDiv.appendChild(entryCard);
+  });
+  
+  // Store entries for saving
+  window.aiGeneratedEntries = entries;
+}
+
+async function saveAIEntry(index) {
+  const entries = window.aiGeneratedEntries;
+  if (!entries || !entries[index]) return;
+  
+  const entry = entries[index].entry;
+  
+  try {
+    const response = await fetch('/api/entries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(entry)
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to save entry');
+    }
+    
+    showSuccess(`Saved: ${entry.thai_script} (${entry.romanization})`);
+    
+    // Remove from display
+    const listDiv = document.getElementById('ai-entries-list');
+    listDiv.children[index].remove();
+    
+    // If all saved, close modal and refresh
+    if (listDiv.children.length === 0) {
+      closeAIModal();
+      loadEntriesPage();
+    }
+    
+  } catch (error) {
+    console.error('Save error:', error);
+    showError('Failed to save entry: ' + error.message);
+  }
+}
+
+function closeAIModal() {
+  const modal = document.getElementById('ai-modal');
+  if (modal) {
+    modal.remove();
+  }
+  window.aiGeneratedEntries = null;
+}
+
+function getToneEmoji(tone) {
+  const emojis = {
+    'mid': '→',
+    'low': '↘',
+    'falling': '↓',
+    'high': '↑',
+    'rising': '↗'
+  };
+  return emojis[tone] || '';
+}

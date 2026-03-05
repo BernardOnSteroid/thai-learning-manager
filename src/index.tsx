@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import * as db from './db'
+import * as ai from './ai'
 
 // Version constant
 const VERSION = '1.0.0-thai'
@@ -896,6 +897,175 @@ app.get('/api/cefr/progression', async (c) => {
     return c.json({ error: 'Failed to fetch progression', details: error.message }, 500)
   }
 })
+
+// ============ AI Generation Endpoints ============
+
+app.post('/api/ai/generate-entry', async (c) => {
+  const { DATABASE_URL, GEMINI_API_KEY } = c.env
+  
+  if (!GEMINI_API_KEY) {
+    return c.json({ error: 'GEMINI_API_KEY not configured' }, 500)
+  }
+  
+  try {
+    const body = await c.req.json()
+    const { prompt, cefr_level, entry_type, count } = body
+    
+    if (!prompt) {
+      return c.json({ error: 'Missing required field: prompt' }, 400)
+    }
+    
+    const entries = await ai.generateEntry({
+      prompt,
+      cefr_level: cefr_level || 'A1',
+      entry_type: entry_type || 'word',
+      count: count || 1
+    }, GEMINI_API_KEY)
+    
+    // Validate entries
+    const validated = entries.map((entry: any) => {
+      const validation = ai.validateEntry(entry)
+      return {
+        entry,
+        validation
+      }
+    })
+    
+    return c.json({
+      success: true,
+      count: entries.length,
+      entries: validated
+    })
+  } catch (error: any) {
+    console.error('Error generating entry:', error)
+    return c.json({ 
+      error: 'Failed to generate entry', 
+      details: error.message 
+    }, 500)
+  }
+})
+
+app.post('/api/ai/enhance-entry', async (c) => {
+  const { GEMINI_API_KEY } = c.env
+  
+  if (!GEMINI_API_KEY) {
+    return c.json({ error: 'GEMINI_API_KEY not configured' }, 500)
+  }
+  
+  try {
+    const body = await c.req.json()
+    const { thai_script, romanization, meaning } = body
+    
+    if (!thai_script) {
+      return c.json({ error: 'Missing required field: thai_script' }, 400)
+    }
+    
+    const enhanced = await ai.enhanceEntry({
+      thai_script,
+      romanization,
+      meaning
+    }, GEMINI_API_KEY)
+    
+    const validation = ai.validateEntry(enhanced)
+    
+    return c.json({
+      success: true,
+      entry: enhanced,
+      validation
+    })
+  } catch (error: any) {
+    console.error('Error enhancing entry:', error)
+    return c.json({ 
+      error: 'Failed to enhance entry', 
+      details: error.message 
+    }, 500)
+  }
+})
+
+app.post('/api/ai/generate-batch', async (c) => {
+  const { GEMINI_API_KEY } = c.env
+  
+  if (!GEMINI_API_KEY) {
+    return c.json({ error: 'GEMINI_API_KEY not configured' }, 500)
+  }
+  
+  try {
+    const body = await c.req.json()
+    const { topic, cefr_level, count } = body
+    
+    if (!topic) {
+      return c.json({ error: 'Missing required field: topic' }, 400)
+    }
+    
+    const entries = await ai.generateBatch(
+      topic,
+      cefr_level || 'A1',
+      count || 5,
+      GEMINI_API_KEY
+    )
+    
+    // Validate all entries
+    const validated = entries.map((entry: any) => {
+      const validation = ai.validateEntry(entry)
+      return {
+        entry,
+        validation
+      }
+    })
+    
+    return c.json({
+      success: true,
+      topic,
+      count: entries.length,
+      entries: validated
+    })
+  } catch (error: any) {
+    console.error('Error generating batch:', error)
+    return c.json({ 
+      error: 'Failed to generate batch', 
+      details: error.message 
+    }, 500)
+  }
+})
+
+app.post('/api/ai/generate-examples', async (c) => {
+  const { GEMINI_API_KEY } = c.env
+  
+  if (!GEMINI_API_KEY) {
+    return c.json({ error: 'GEMINI_API_KEY not configured' }, 500)
+  }
+  
+  try {
+    const body = await c.req.json()
+    const { thai_script, meaning, count } = body
+    
+    if (!thai_script || !meaning) {
+      return c.json({ error: 'Missing required fields: thai_script, meaning' }, 400)
+    }
+    
+    const examples = await ai.generateExamples(
+      thai_script,
+      meaning,
+      count || 3,
+      GEMINI_API_KEY
+    )
+    
+    return c.json({
+      success: true,
+      thai_script,
+      count: examples.length,
+      examples
+    })
+  } catch (error: any) {
+    console.error('Error generating examples:', error)
+    return c.json({ 
+      error: 'Failed to generate examples', 
+      details: error.message 
+    }, 500)
+  }
+})
+
+// ============ Helper Functions ============
 
 function getLevelName(level: string): string {
   const names: Record<string, string> = {
