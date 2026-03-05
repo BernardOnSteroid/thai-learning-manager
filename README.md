@@ -3,7 +3,7 @@
 **Learn Thai with CEFR-based Spaced Repetition**
 
 Version: 1.0.0-thai  
-Status: 🚧 In Development (6/12 prompts completed - 50%)
+Status: 🚧 In Development (7/12 prompts completed - 58%)
 
 ---
 
@@ -213,7 +213,7 @@ npm run build && pm2 restart thai-webapp
 | 11 | 🔜 Pending | Admin tools | 0% |
 | 12 | 🔜 Pending | Production deployment | 0% |
 
-**Overall Progress: 50% (6/12 prompts)**
+**Overall Progress: 58% (7/12 prompts)**
 
 ---
 
@@ -283,6 +283,18 @@ Visit `/docs` for complete API documentation with examples.
 ## 🤝 Contributing
 
 This is a learning project. Feedback and suggestions welcome!
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+**Last Updated**: 2026-03-05  
+**Next Step**: Prompt 7 - Entry Management UI
+ck and suggestions welcome!
 
 ---
 
