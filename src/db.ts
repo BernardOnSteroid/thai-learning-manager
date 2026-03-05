@@ -313,16 +313,14 @@ export async function getDueForReview(
 export async function getStats(databaseUrl: string) {
   const sql = getDbClient(databaseUrl);
   
-  const totalResult = await sql.query('SELECT COUNT(*) as count FROM entries WHERE archived = false');
-  const progressResult = await sql.query('SELECT COUNT(*) as count FROM learning_progress');
-  const dueResult = await sql.query(
-    'SELECT COUNT(*) as count FROM learning_progress WHERE next_review <= NOW()'
-  );
+  const totalResult = await sql`SELECT COUNT(*) as count FROM entries WHERE archived = false`;
+  const progressResult = await sql`SELECT COUNT(*) as count FROM learning_progress`;
+  const dueResult = await sql`SELECT COUNT(*) as count FROM learning_progress WHERE next_review <= NOW()`;
   
   return {
-    total_entries: parseInt(totalResult.rows[0].count),
-    learning_progress: parseInt(progressResult.rows[0].count),
-    due_for_review: parseInt(dueResult.rows[0].count)
+    total_entries: totalResult[0]?.count ? parseInt(totalResult[0].count) : 0,
+    learning_progress: progressResult[0]?.count ? parseInt(progressResult[0].count) : 0,
+    due_for_review: dueResult[0]?.count ? parseInt(dueResult[0].count) : 0
   };
 }
 
@@ -379,9 +377,13 @@ export async function getCEFRProgression(databaseUrl: string) {
   const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
   const result: Record<string, any> = {};
   
+  // Ensure rows arrays exist
+  const entryRows = entries.rows || [];
+  const progressRows = progress.rows || [];
+  
   levels.forEach(level => {
-    const totalInLevel = entries.rows.filter((e: any) => e.cefr_level === level).length;
-    const masteredInLevel = progress.rows.filter(
+    const totalInLevel = entryRows.filter((e: any) => e.cefr_level === level).length;
+    const masteredInLevel = progressRows.filter(
       (p: any) => p.cefr_level === level && p.srs_level >= 4
     ).length;
     

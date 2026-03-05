@@ -392,3 +392,270 @@ app.get('/', (c) => {
 })
 
 export default app
+
+// ============ SRS Algorithm (SM-2) ============
+
+function calculateSRS(quality: number, currentSrsLevel: number, easeFactor: number, interval: number) {
+  // SM-2 Spaced Repetition Algorithm
+  // quality: 0-5 (0=total failure, 5=perfect recall)
+  
+  let newEaseFactor = easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+  
+  if (newEaseFactor < 1.3) {
+    newEaseFactor = 1.3
+  }
+  
+  let newInterval: number
+  let newSrsLevel: number
+  
+  if (quality < 3) {
+    // Failed - reset to beginning
+    newInterval = 1
+    newSrsLevel = 0
+  } else {
+    // Passed
+    if (currentSrsLevel === 0) {
+      newInterval = 1
+    } else if (currentSrsLevel === 1) {
+      newInterval = 6
+    } else {
+      newInterval = Math.round(interval * newEaseFactor)
+    }
+    newSrsLevel = currentSrsLevel + 1
+  }
+  
+  const nextReviewDate = new Date()
+  nextReviewDate.setDate(nextReviewDate.getDate() + newInterval)
+  
+  return {
+    newSrsLevel,
+    newEaseFactor,
+    newInterval,
+    nextReviewDate
+  }
+}
+
+// ============ Review System ============
+
+app.get('/api/revision/due', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const limit = parseInt(c.req.query('limit') || '20')
+    const cefrLevel = c.req.query('cefr_level')
+    const entryType = c.req.query('entry_type')
+    
+    const items = await db.getDueForReview(DATABASE_URL, limit)
+    
+    // Filter by CEFR level if specified
+    let filtered = items
+    if (cefrLevel) {
+      filtered = items.filter((item: any) => item.cefr_level === cefrLevel)
+    }
+    if (entryType) {
+      filtered = filtered.filter((item: any) => item.entry_type === entryType)
+    }
+    
+    return c.json(filtered)
+  } catch (error: any) {
+    console.error('Error fetching due items:', error)
+    return c.json({ error: 'Failed to fetch due items', details: error.message }, 500)
+  }
+})
+
+app.post('/api/revision/submit', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const { entry_id, quality } = await c.req.json()
+    
+    if (!entry_id || quality === undefined) {
+      return c.json({ error: 'Missing entry_id or quality' }, 400)
+    }
+    
+    if (quality < 0 || quality > 5) {
+      return c.json({ error: 'Quality must be between 0 and 5' }, 400)
+    }
+    
+    // Get or create learning progress
+    let progress = await db.getLearningProgress(DATABASE_URL, entry_id)
+    
+    if (!progress) {
+      progress = await db.createLearningProgress(DATABASE_URL, entry_id)
+    }
+    
+    // Calculate new SRS values
+    const srsResult = calculateSRS(
+      quality,
+      progress.srs_level,
+      progress.ease_factor,
+      progress.interval
+    )
+    
+    // Update progress
+    const updatedProgress = await db.updateLearningProgress(DATABASE_URL, entry_id, {
+      srs_level: srsResult.newSrsLevel,
+      ease_factor: srsResult.newEaseFactor,
+      interval: srsResult.newInterval,
+      next_review: srsResult.nextReviewDate,
+      last_reviewed: new Date(),
+      correct_count: quality >= 3 ? progress.correct_count + 1 : progress.correct_count,
+      incorrect_count: quality < 3 ? progress.incorrect_count + 1 : progress.incorrect_count
+    })
+    
+    return c.json({
+      success: true,
+      srs_level: srsResult.newSrsLevel,
+      interval: srsResult.newInterval,
+      next_review: srsResult.nextReviewDate,
+      progress: updatedProgress
+    })
+  } catch (error: any) {
+    console.error('Error submitting review:', error)
+    return c.json({ error: 'Failed to submit review', details: error.message }, 500)
+  }
+})
+
+app.get('/api/revision/stats', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const stats = await db.getStats(DATABASE_URL)
+    return c.json(stats)
+  } catch (error: any) {
+    console.error('Error fetching revision stats:', error)
+    return c.json({ error: 'Failed to fetch stats', details: error.message }, 500)
+  }
+})
+
+// ============ Learning System ============
+
+app.get('/api/learning/new', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const limit = parseInt(c.req.query('limit') || '10')
+    const cefrLevel = c.req.query('cefr_level') || 'A1'
+    
+    // Get entries that don't have learning progress yet
+    const sql = db.getDbClient(DATABASE_URL)
+    const result = await sql.query(
+      `SELECT e.* FROM entries e
+       LEFT JOIN learning_progress lp ON e.id = lp.entry_id
+       WHERE lp.id IS NULL
+         AND e.archived = false
+         AND e.cefr_level = $1
+       ORDER BY e.difficulty ASC, e.created_at ASC
+       LIMIT $2`,
+      [cefrLevel, limit]
+    )
+    
+    return c.json(result.rows)
+  } catch (error: any) {
+    console.error('Error fetching new items:', error)
+    return c.json({ error: 'Failed to fetch new items', details: error.message }, 500)
+  }
+})
+
+app.post('/api/learning/start', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const { entry_id } = await c.req.json()
+    
+    if (!entry_id) {
+      return c.json({ error: 'Missing entry_id' }, 400)
+    }
+    
+    // Create learning progress
+    const progress = await db.createLearningProgress(DATABASE_URL, entry_id)
+    
+    return c.json({
+      success: true,
+      progress
+    })
+  } catch (error: any) {
+    console.error('Error starting learning:', error)
+    return c.json({ error: 'Failed to start learning', details: error.message }, 500)
+  }
+})
+
+// ============ CEFR Progression ============
+
+app.get('/api/cefr/progression', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const progression = await db.getCEFRProgression(DATABASE_URL)
+    
+    // Calculate overall progress
+    let totalEntries = 0
+    let totalMastered = 0
+    
+    Object.values(progression).forEach((level: any) => {
+      totalEntries += level.total
+      totalMastered += level.mastered
+    })
+    
+    const overallPercentage = totalEntries > 0 
+      ? Math.round((totalMastered / totalEntries) * 100)
+      : 0
+    
+    // Determine current focus level (first level not mastered)
+    let currentLevel = 'A1'
+    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    for (const level of levels) {
+      if (progression[level].percentage < 80) {
+        currentLevel = level
+        break
+      }
+    }
+    
+    return c.json({
+      progression,
+      overall: {
+        total_entries: totalEntries,
+        total_mastered: totalMastered,
+        percentage: overallPercentage
+      },
+      recommendation: {
+        focus_level: currentLevel,
+        message: `Focus on ${currentLevel} - ${getLevelName(currentLevel)}`
+      }
+    })
+  } catch (error: any) {
+    console.error('Error fetching CEFR progression:', error)
+    return c.json({ error: 'Failed to fetch progression', details: error.message }, 500)
+  }
+})
+
+function getLevelName(level: string): string {
+  const names: Record<string, string> = {
+    'A1': 'Breakthrough - Basic survival Thai',
+    'A2': 'Waystage - Tourist conversations',
+    'B1': 'Threshold - Daily life communication',
+    'B2': 'Vantage - Fluent conversations',
+    'C1': 'Proficiency - Professional/academic',
+    'C2': 'Mastery - Native-like fluency'
+  }
+  return names[level] || level
+}
+
