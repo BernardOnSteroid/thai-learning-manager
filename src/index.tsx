@@ -572,10 +572,30 @@ app.get('/', (c) => {
         <style>
           body {
             font-family: 'Taviraj', 'Trirong', serif;
+            font-size: 16px;
+            line-height: 1.7;
           }
           .thai-text {
             font-family: 'Taviraj', 'Trirong', serif;
-            letter-spacing: 0.02em;
+            letter-spacing: 0.025em;
+            line-height: 1.8;
+            font-weight: 500;
+          }
+          /* Enhance Thai character rendering */
+          .thai-word {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #1e40af;
+          }
+          /* Better button and heading fonts */
+          button, .font-bold, h1, h2, h3, h4 {
+            font-family: 'Taviraj', 'Trirong', serif;
+            font-weight: 600;
+          }
+          /* Cards with Thai text */
+          .card .thai-text {
+            font-size: 1.15em;
+            line-height: 2;
           }
         </style>
     </head>
