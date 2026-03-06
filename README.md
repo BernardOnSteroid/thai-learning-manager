@@ -8,6 +8,14 @@
 
 ## 🌟 Features
 
+### 🔐 **Multi-User Authentication** ✨ NEW!
+- **Secure registration & login** with JWT tokens
+- **Per-user progress tracking** - each user has isolated learning data
+- **Shared vocabulary database** - all 52 Thai entries available to everyone
+- **Session persistence** - stay logged in across browser sessions
+- **User profiles** - display name and email in navigation
+- **Logout functionality** - secure session termination
+
 ### 📚 **Comprehensive Thai Vocabulary System**
 - **52+ A1-level entries** covering essential survival Thai
 - **CEFR-aligned** progression (A1 → C2)
