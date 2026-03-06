@@ -103,8 +103,13 @@ async function handleRegister(event) {
     
     setAuthToken(data.token);
     setCurrentUser(data.user);
+    
+    // Show navigation
+    const nav = document.querySelector('nav');
+    if (nav) nav.style.display = 'block';
+    
     showToast('Registration successful! Welcome ' + data.user.name, 'success');
-    loadPage('dashboard');
+    showPage('dashboard');
   } catch (error) {
     errorDiv.textContent = 'Registration failed: ' + error.message;
     errorDiv.classList.remove('hidden');
@@ -135,8 +140,13 @@ async function handleLogin(event) {
     
     setAuthToken(data.token);
     setCurrentUser(data.user);
+    
+    // Show navigation
+    const nav = document.querySelector('nav');
+    if (nav) nav.style.display = 'block';
+    
     showToast('Welcome back, ' + data.user.name + '!', 'success');
-    loadPage('dashboard');
+    showPage('dashboard');
   } catch (error) {
     errorDiv.textContent = 'Login failed: ' + error.message;
     errorDiv.classList.remove('hidden');
@@ -302,26 +312,36 @@ async function apiRequest(endpoint, options = {}) {
 
 async function loadDashboard() {
   try {
+    console.log('Loading dashboard...');
     showLoading('dashboard-content');
     
     // Fetch all dashboard data in parallel
+    console.log('Fetching dashboard data...');
     const [stats, cefrProgression, dashboardStats] = await Promise.all([
       apiRequest('/api/revision/stats'),
       apiRequest('/api/cefr/progression'),
       apiRequest('/api/dashboard/stats')
     ]);
     
+    console.log('Dashboard data received:', { stats, cefrProgression, dashboardStats });
+    
     // Render stats cards
+    console.log('Rendering stats cards...');
     renderStatsCards(stats, dashboardStats);
     
     // Render CEFR progression
+    console.log('Rendering CEFR progression...');
     renderCEFRProgression(cefrProgression);
     
     // Render charts
+    console.log('Rendering charts...');
     renderCharts(dashboardStats, cefrProgression);
     
+    console.log('Dashboard loaded successfully');
     hideLoading('dashboard-content');
   } catch (error) {
+    console.error('Dashboard load error:', error);
+    hideLoading('dashboard-content');
     showError('dashboard-content', 'Failed to load dashboard: ' + error.message);
   }
 }
@@ -424,14 +444,25 @@ function renderCEFRProgression(data) {
 let charts = {};
 
 function renderCharts(dashboardStats, cefrProgression) {
-  // CEFR Bar Chart
-  renderCEFRChart(cefrProgression);
-  
-  // Entry Type Pie Chart
-  renderTypeChart(dashboardStats.byType || {});
-  
-  // Tone Distribution Chart
-  renderToneChart(dashboardStats.byTone || {});
+  try {
+    console.log('renderCharts called with:', { dashboardStats, cefrProgression });
+    
+    // CEFR Bar Chart
+    console.log('Rendering CEFR chart...');
+    renderCEFRChart(cefrProgression);
+    
+    // Entry Type Pie Chart
+    console.log('Rendering type chart...');
+    renderTypeChart(dashboardStats.byType || {});
+    
+    // Tone Distribution Chart
+    console.log('Rendering tone chart...');
+    renderToneChart(dashboardStats.byTone || {});
+    
+    console.log('All charts rendered successfully');
+  } catch (error) {
+    console.error('Error rendering charts:', error);
+  }
 }
 
 function renderCEFRChart(cefrProgression) {
@@ -1788,6 +1819,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!isAuthenticated) {
     return; // showLoginPage() already called by checkAuth
   }
+  
+  // Show navigation for authenticated users
+  const nav = document.querySelector('nav');
+  if (nav) nav.style.display = 'block';
   
   // Update user menu with current user info
   const user = getCurrentUser();
