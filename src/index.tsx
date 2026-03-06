@@ -567,14 +567,15 @@ app.get('/', (c) => {
         <title>Thai Learning Manager - เรียนภาษาไทย</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Taviraj:wght@400;500;600;700&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
         <style>
           body {
-            font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
+            font-family: 'Taviraj', 'Trirong', serif;
           }
           .thai-text {
-            font-family: 'Noto Sans Thai', sans-serif;
+            font-family: 'Taviraj', 'Trirong', serif;
+            letter-spacing: 0.02em;
           }
         </style>
     </head>
