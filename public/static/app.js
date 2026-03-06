@@ -8,20 +8,285 @@ console.log('🇹🇭 Thai Learning Manager Frontend v1.0.0 loaded');
 
 const API_BASE = '';  // Same origin
 let currentPage = 'dashboard';
+let currentUser = null;
+let authToken = null;
+
+// ============ Authentication Functions ============
+
+function getAuthToken() {
+  if (!authToken) {
+    authToken = localStorage.getItem('authToken');
+  }
+  return authToken;
+}
+
+function setAuthToken(token) {
+  authToken = token;
+  localStorage.setItem('authToken', token);
+}
+
+function clearAuthToken() {
+  authToken = null;
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('currentUser');
+  currentUser = null;
+}
+
+function getCurrentUser() {
+  if (!currentUser) {
+    const stored = localStorage.getItem('currentUser');
+    if (stored) {
+      currentUser = JSON.parse(stored);
+    }
+  }
+  return currentUser;
+}
+
+function setCurrentUser(user) {
+  currentUser = user;
+  localStorage.setItem('currentUser', JSON.stringify(user));
+}
+
+async function checkAuth() {
+  const token = getAuthToken();
+  if (!token) {
+    showLoginPage();
+    return false;
+  }
+  
+  try {
+    const response = await fetch('/api/auth/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      clearAuthToken();
+      showLoginPage();
+      return false;
+    }
+    
+    const data = await response.json();
+    setCurrentUser(data.user);
+    return true;
+  } catch (error) {
+    console.error('Auth check failed:', error);
+    clearAuthToken();
+    showLoginPage();
+    return false;
+  }
+}
+
+async function handleRegister(event) {
+  event.preventDefault();
+  
+  const email = document.getElementById('register-email').value;
+  const password = document.getElementById('register-password').value;
+  const name = document.getElementById('register-name').value;
+  const errorDiv = document.getElementById('register-error');
+  
+  try {
+    const response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password, name })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      errorDiv.textContent = data.error || 'Registration failed';
+      errorDiv.classList.remove('hidden');
+      return;
+    }
+    
+    setAuthToken(data.token);
+    setCurrentUser(data.user);
+    showToast('Registration successful! Welcome ' + data.user.name, 'success');
+    loadPage('dashboard');
+  } catch (error) {
+    errorDiv.textContent = 'Registration failed: ' + error.message;
+    errorDiv.classList.remove('hidden');
+  }
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+  
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const errorDiv = document.getElementById('login-error');
+  
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      errorDiv.textContent = data.error || 'Login failed';
+      errorDiv.classList.remove('hidden');
+      return;
+    }
+    
+    setAuthToken(data.token);
+    setCurrentUser(data.user);
+    showToast('Welcome back, ' + data.user.name + '!', 'success');
+    loadPage('dashboard');
+  } catch (error) {
+    errorDiv.textContent = 'Login failed: ' + error.message;
+    errorDiv.classList.remove('hidden');
+  }
+}
+
+function handleLogout() {
+  clearAuthToken();
+  showToast('Logged out successfully', 'info');
+  showLoginPage();
+}
+
+function showLoginPage() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
+      <div class="max-w-md w-full">
+        <div class="text-center mb-8">
+          <h1 class="text-4xl font-bold text-gray-800 mb-2">🇹🇭 Thai Learning Manager</h1>
+          <p class="text-gray-600">Master Thai with CEFR-based progression</p>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-8">
+          <div class="flex border-b mb-6">
+            <button id="tab-login" class="flex-1 py-2 px-4 font-semibold border-b-2 border-purple-600 text-purple-600">
+              Login
+            </button>
+            <button id="tab-register" class="flex-1 py-2 px-4 font-semibold text-gray-500 hover:text-gray-700">
+              Register
+            </button>
+          </div>
+          
+          <!-- Login Form -->
+          <form id="login-form" class="space-y-4">
+            <div id="login-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded"></div>
+            
+            <div>
+              <label class="block text-gray-700 font-medium mb-2">Email</label>
+              <input type="email" id="login-email" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="your@email.com">
+            </div>
+            
+            <div>
+              <label class="block text-gray-700 font-medium mb-2">Password</label>
+              <input type="password" id="login-password" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="••••••••">
+            </div>
+            
+            <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition">
+              <i class="fas fa-sign-in-alt mr-2"></i>Login
+            </button>
+          </form>
+          
+          <!-- Register Form -->
+          <form id="register-form" class="space-y-4 hidden">
+            <div id="register-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded"></div>
+            
+            <div>
+              <label class="block text-gray-700 font-medium mb-2">Name</label>
+              <input type="text" id="register-name" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="Your Name">
+            </div>
+            
+            <div>
+              <label class="block text-gray-700 font-medium mb-2">Email</label>
+              <input type="email" id="register-email" required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="your@email.com">
+            </div>
+            
+            <div>
+              <label class="block text-gray-700 font-medium mb-2">Password</label>
+              <input type="password" id="register-password" required minlength="6"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                placeholder="At least 6 characters">
+              <p class="text-sm text-gray-500 mt-1">Minimum 6 characters</p>
+            </div>
+            
+            <button type="submit" class="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition">
+              <i class="fas fa-user-plus mr-2"></i>Create Account
+            </button>
+          </form>
+        </div>
+        
+        <div class="mt-6 text-center text-gray-600 text-sm">
+          <p>🎓 Learn Thai with spaced repetition</p>
+          <p>📊 Track progress across CEFR levels A1-C2</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Hide navigation
+  const nav = document.querySelector('nav');
+  if (nav) nav.style.display = 'none';
+  
+  // Setup tab switching
+  document.getElementById('tab-login').addEventListener('click', () => {
+    document.getElementById('tab-login').classList.add('border-purple-600', 'text-purple-600');
+    document.getElementById('tab-login').classList.remove('text-gray-500');
+    document.getElementById('tab-register').classList.remove('border-purple-600', 'text-purple-600');
+    document.getElementById('tab-register').classList.add('text-gray-500');
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('register-form').classList.add('hidden');
+  });
+  
+  document.getElementById('tab-register').addEventListener('click', () => {
+    document.getElementById('tab-register').classList.add('border-purple-600', 'text-purple-600');
+    document.getElementById('tab-register').classList.remove('text-gray-500');
+    document.getElementById('tab-login').classList.remove('border-purple-600', 'text-purple-600');
+    document.getElementById('tab-login').classList.add('text-gray-500');
+    document.getElementById('register-form').classList.remove('hidden');
+    document.getElementById('login-form').classList.add('hidden');
+  });
+  
+  // Setup form handlers
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  document.getElementById('register-form').addEventListener('submit', handleRegister);
+}
 
 // ============ API Helper Functions ============
 
 async function apiRequest(endpoint, options = {}) {
   try {
+    const token = getAuthToken();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers
+    };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`${API_BASE}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
+      headers,
       ...options
     });
     
     if (!response.ok) {
+      // If unauthorized, redirect to login
+      if (response.status === 401) {
+        clearAuthToken();
+        showLoginPage();
+        throw new Error('Session expired. Please login again.');
+      }
+      
       const error = await response.json();
       throw new Error(error.error || error.message || 'API request failed');
     }
@@ -1515,8 +1780,40 @@ function toggleMobileMenu() {
 
 // ============ Initialize ============
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 Initializing Thai Learning Manager...');
+  
+  // Check authentication first
+  const isAuthenticated = await checkAuth();
+  if (!isAuthenticated) {
+    return; // showLoginPage() already called by checkAuth
+  }
+  
+  // Update user menu with current user info
+  const user = getCurrentUser();
+  if (user) {
+    const userNameEl = document.getElementById('user-name');
+    const userEmailEl = document.getElementById('user-email');
+    if (userNameEl) userNameEl.textContent = user.name || 'User';
+    if (userEmailEl) userEmailEl.textContent = user.email || '';
+  }
+  
+  // Setup user menu toggle
+  const userMenuBtn = document.getElementById('user-menu-btn');
+  const userMenu = document.getElementById('user-menu');
+  if (userMenuBtn && userMenu) {
+    userMenuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      userMenu.classList.toggle('hidden');
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', () => {
+      if (!userMenu.classList.contains('hidden')) {
+        userMenu.classList.add('hidden');
+      }
+    });
+  }
   
   // Setup navigation
   document.querySelectorAll('[data-page]').forEach(link => {
