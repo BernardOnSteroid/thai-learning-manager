@@ -532,36 +532,6 @@ function renderCEFRChart(cefrProgression) {
     console.error('❌ Error rendering CEFR chart:', error);
   }
 }
-          'rgb(239, 68, 68)',
-          'rgb(168, 85, 247)'
-        ],
-        borderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          display: false
-        },
-        title: {
-          display: true,
-          text: 'Entries by CEFR Level',
-          font: { size: 16 }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: {
-            precision: 0
-          }
-        }
-      }
-    }
-  });
-}
 
 function renderTypeChart(byType) {
   const ctx = document.getElementById('type-chart');
@@ -1275,13 +1245,6 @@ async function toggleArchive(entryId, archived) {
   }
 }
 
-async function loadLearnPage() {
-  const container = document.getElementById('learn-content');
-  if (container) {
-    container.innerHTML = '<p class="text-gray-500 text-center py-8">Learning mode coming in Prompt 8...</p>';
-  }
-}
-
 // ============ Learning & Review Functions ============
 
 let learningSession = {
@@ -1823,13 +1786,6 @@ function showReviewComplete() {
   // Refresh dashboard stats
   if (currentPage === 'dashboard') {
     loadDashboard();
-  }
-}
-
-async function loadReviewPage() {
-  const container = document.getElementById('review-content');
-  if (container) {
-    container.innerHTML = '<p class="text-gray-500 text-center py-8">Review mode coming in Prompt 8...</p>';
   }
 }
 
