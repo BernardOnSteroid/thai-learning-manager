@@ -107,8 +107,10 @@ async function handleRegister(event) {
     setCurrentUser(data.user);
     showToast('Registration successful! Welcome ' + data.user.name, 'success');
     
-    // Initialize app and navigation
-    initializeApp();
+    // Reload page to restore HTML structure and initialize app
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   } catch (error) {
     errorDiv.textContent = 'Registration failed: ' + error.message;
     errorDiv.classList.remove('hidden');
@@ -141,8 +143,10 @@ async function handleLogin(event) {
     setCurrentUser(data.user);
     showToast('Welcome back, ' + data.user.name + '!', 'success');
     
-    // Initialize app and navigation
-    initializeApp();
+    // Reload page to restore HTML structure and initialize app
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   } catch (error) {
     errorDiv.textContent = 'Login failed: ' + error.message;
     errorDiv.classList.remove('hidden');
