@@ -103,13 +103,10 @@ async function handleRegister(event) {
     
     setAuthToken(data.token);
     setCurrentUser(data.user);
-    
-    // Show navigation
-    const nav = document.querySelector('nav');
-    if (nav) nav.style.display = 'block';
-    
     showToast('Registration successful! Welcome ' + data.user.name, 'success');
-    showPage('dashboard');
+    
+    // Initialize app and navigation
+    initializeApp();
   } catch (error) {
     errorDiv.textContent = 'Registration failed: ' + error.message;
     errorDiv.classList.remove('hidden');
@@ -140,13 +137,10 @@ async function handleLogin(event) {
     
     setAuthToken(data.token);
     setCurrentUser(data.user);
-    
-    // Show navigation
-    const nav = document.querySelector('nav');
-    if (nav) nav.style.display = 'block';
-    
     showToast('Welcome back, ' + data.user.name + '!', 'success');
-    showPage('dashboard');
+    
+    // Initialize app and navigation
+    initializeApp();
   } catch (error) {
     errorDiv.textContent = 'Login failed: ' + error.message;
     errorDiv.classList.remove('hidden');
@@ -466,39 +460,76 @@ function renderCharts(dashboardStats, cefrProgression) {
 }
 
 function renderCEFRChart(cefrProgression) {
-  const ctx = document.getElementById('cefr-chart');
-  if (!ctx) return;
-  
-  const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-  const data = levels.map(level => {
-    const levelData = cefrProgression.progression[level] || { total: 0 };
-    return levelData.total;
-  });
-  
-  if (charts.cefrChart) {
-    charts.cefrChart.destroy();
+  try {
+    const ctx = document.getElementById('cefr-chart');
+    if (!ctx) {
+      console.warn('⚠️ CEFR chart canvas not found');
+      return;
+    }
+    
+    if (!cefrProgression || !cefrProgression.progression) {
+      console.error('❌ Invalid CEFR progression data:', cefrProgression);
+      return;
+    }
+    
+    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const data = levels.map(level => {
+      const levelData = cefrProgression.progression[level] || { total: 0 };
+      return levelData.total;
+    });
+    
+    console.log('📊 CEFR chart data:', data);
+    
+    if (charts.cefrChart) {
+      charts.cefrChart.destroy();
+    }
+    
+    if (typeof Chart === 'undefined') {
+      console.error('❌ Chart.js not loaded');
+      return;
+    }
+    
+    charts.cefrChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: levels,
+        datasets: [{
+          label: 'Entries per CEFR Level',
+          data: data,
+          backgroundColor: [
+            'rgba(34, 197, 94, 0.7)',   // A1 - green
+            'rgba(59, 130, 246, 0.7)',  // A2 - blue
+            'rgba(234, 179, 8, 0.7)',   // B1 - yellow
+            'rgba(249, 115, 22, 0.7)',  // B2 - orange
+            'rgba(239, 68, 68, 0.7)',   // C1 - red
+            'rgba(168, 85, 247, 0.7)'   // C2 - purple
+          ],
+          borderColor: [
+            'rgb(34, 197, 94)',
+            'rgb(59, 130, 246)',
+            'rgb(234, 179, 8)',
+            'rgb(249, 115, 22)',
+            'rgb(239, 68, 68)',
+            'rgb(168, 85, 247)'
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+    console.log('✅ CEFR chart rendered successfully');
+  } catch (error) {
+    console.error('❌ Error rendering CEFR chart:', error);
   }
-  
-  charts.cefrChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: levels,
-      datasets: [{
-        label: 'Entries per CEFR Level',
-        data: data,
-        backgroundColor: [
-          'rgba(34, 197, 94, 0.7)',   // A1 - green
-          'rgba(59, 130, 246, 0.7)',  // A2 - blue
-          'rgba(234, 179, 8, 0.7)',   // B1 - yellow
-          'rgba(249, 115, 22, 0.7)',  // B2 - orange
-          'rgba(239, 68, 68, 0.7)',   // C1 - red
-          'rgba(168, 85, 247, 0.7)'   // C2 - purple
-        ],
-        borderColor: [
-          'rgb(34, 197, 94)',
-          'rgb(59, 130, 246)',
-          'rgb(234, 179, 8)',
-          'rgb(249, 115, 22)',
+}
           'rgb(239, 68, 68)',
           'rgb(168, 85, 247)'
         ],
@@ -1811,14 +1842,8 @@ function toggleMobileMenu() {
 
 // ============ Initialize ============
 
-document.addEventListener('DOMContentLoaded', async () => {
-  console.log('🚀 Initializing Thai Learning Manager...');
-  
-  // Check authentication first
-  const isAuthenticated = await checkAuth();
-  if (!isAuthenticated) {
-    return; // showLoginPage() already called by checkAuth
-  }
+function initializeApp() {
+  console.log('🔧 Initializing app components...');
   
   // Show navigation for authenticated users
   const nav = document.querySelector('nav');
@@ -1831,14 +1856,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userEmailEl = document.getElementById('user-email');
     if (userNameEl) userNameEl.textContent = user.name || 'User';
     if (userEmailEl) userEmailEl.textContent = user.email || '';
+    console.log('✅ User menu updated:', user.name);
   }
   
   // Setup user menu toggle
   const userMenuBtn = document.getElementById('user-menu-btn');
   const userMenu = document.getElementById('user-menu');
   if (userMenuBtn && userMenu) {
-    userMenuBtn.addEventListener('click', (e) => {
+    // Remove old listeners by cloning
+    const newUserMenuBtn = userMenuBtn.cloneNode(true);
+    userMenuBtn.parentNode.replaceChild(newUserMenuBtn, userMenuBtn);
+    
+    newUserMenuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      e.preventDefault();
+      console.log('🖱️ User menu clicked');
       userMenu.classList.toggle('hidden');
     });
     
@@ -1848,13 +1880,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         userMenu.classList.add('hidden');
       }
     });
+    console.log('✅ User menu toggle initialized');
   }
   
   // Setup navigation
+  console.log('🔧 Setting up navigation links...');
   document.querySelectorAll('[data-page]').forEach(link => {
-    link.addEventListener('click', (e) => {
+    // Remove old listener by cloning
+    const newLink = link.cloneNode(true);
+    link.parentNode.replaceChild(newLink, link);
+    
+    newLink.addEventListener('click', (e) => {
       e.preventDefault();
-      const pageName = link.dataset.page;
+      e.stopPropagation();
+      const pageName = newLink.dataset.page;
+      console.log('🔗 Navigation clicked:', pageName);
       showPage(pageName);
       
       // Close mobile menu if open
@@ -1864,6 +1904,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
   });
+  console.log('✅ Navigation links initialized');
   
   // Setup mobile menu toggle
   const mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -1872,7 +1913,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   
   // Load initial page
+  console.log('📄 Loading dashboard...');
   showPage('dashboard');
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 Initializing Thai Learning Manager...');
+  
+  // Check authentication first
+  const isAuthenticated = await checkAuth();
+  if (!isAuthenticated) {
+    console.log('❌ Not authenticated, showing login page');
+    return; // showLoginPage() already called by checkAuth
+  }
+  
+  console.log('✅ User authenticated, initializing app...');
+  initializeApp();
 });
 
 // ============ AI Generation Functions ============
