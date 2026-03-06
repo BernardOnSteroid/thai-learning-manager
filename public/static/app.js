@@ -155,6 +155,41 @@ function handleLogout() {
   showLoginPage();
 }
 
+function showToast(message, type = 'info') {
+  // Create toast container if it doesn't exist
+  let toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.className = 'fixed top-4 right-4 z-50 space-y-2';
+    document.body.appendChild(toastContainer);
+  }
+  
+  // Create toast element
+  const toast = document.createElement('div');
+  const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+  toast.className = `${bgColor} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 opacity-0 translate-x-full`;
+  toast.textContent = message;
+  
+  toastContainer.appendChild(toast);
+  
+  // Animate in
+  setTimeout(() => {
+    toast.classList.remove('opacity-0', 'translate-x-full');
+  }, 10);
+  
+  // Remove after 3 seconds
+  setTimeout(() => {
+    toast.classList.add('opacity-0', 'translate-x-full');
+    setTimeout(() => {
+      toastContainer.removeChild(toast);
+      if (toastContainer.children.length === 0) {
+        document.body.removeChild(toastContainer);
+      }
+    }, 300);
+  }, 3000);
+}
+
 function showLoginPage() {
   const app = document.getElementById('app');
   app.innerHTML = `
