@@ -1188,8 +1188,8 @@ app.get('/api/cefr/progression', async (c) => {
     const progression: any = {}
     
     levels.forEach(level => {
-      const total = allEntries.find((e: any) => e.cefr_level === level)?.total || 0
-      const mastered = masteredEntries.find((e: any) => e.cefr_level === level)?.mastered || 0
+      const total = parseInt(allEntries.find((e: any) => e.cefr_level === level)?.total || '0')
+      const mastered = parseInt(masteredEntries.find((e: any) => e.cefr_level === level)?.mastered || '0')
       progression[level] = {
         total,
         mastered,
