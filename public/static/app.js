@@ -105,13 +105,17 @@ async function handleRegister(event) {
     
     setAuthToken(data.token);
     setCurrentUser(data.user);
+    console.log('✅ Registration successful, token saved');
     showToast('Registration successful! Welcome ' + data.user.name, 'success');
     
     // Reload page to restore HTML structure and initialize app
+    console.log('🔄 Reloading page in 1 second...');
     setTimeout(() => {
+      console.log('🔄 Reloading now!');
       window.location.reload();
     }, 1000);
   } catch (error) {
+    console.error('❌ Registration error:', error);
     errorDiv.textContent = 'Registration failed: ' + error.message;
     errorDiv.classList.remove('hidden');
   }
@@ -141,13 +145,17 @@ async function handleLogin(event) {
     
     setAuthToken(data.token);
     setCurrentUser(data.user);
+    console.log('✅ Login successful, token saved');
     showToast('Welcome back, ' + data.user.name + '!', 'success');
     
     // Reload page to restore HTML structure and initialize app
+    console.log('🔄 Reloading page in 1 second...');
     setTimeout(() => {
+      console.log('🔄 Reloading now!');
       window.location.reload();
     }, 1000);
   } catch (error) {
+    console.error('❌ Login error:', error);
     errorDiv.textContent = 'Login failed: ' + error.message;
     errorDiv.classList.remove('hidden');
   }
