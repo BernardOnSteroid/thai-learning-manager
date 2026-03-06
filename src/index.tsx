@@ -659,6 +659,7 @@ app.get('/', (c) => {
 
         <!-- Main Content -->
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div id="app">
             
             <!-- Dashboard Page -->
             <div id="dashboard-page">
@@ -861,6 +862,7 @@ app.get('/', (c) => {
                 <div id="review-content"></div>
             </div>
 
+            </div><!-- #app -->
         </main>
 
         <!-- Footer -->
