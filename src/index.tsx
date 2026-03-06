@@ -4,7 +4,6 @@
 
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { serveStatic } from 'hono/cloudflare-workers'
 import * as db from './db'
 import * as ai from './ai'
 import * as auth from './auth'
@@ -54,9 +53,6 @@ app.use('/api/*', async (c, next) => {
   
   await next()
 })
-
-// Serve static files
-app.use('/static/*', serveStatic({ root: './' }))
 
 // ============ Health & Version ============
 
