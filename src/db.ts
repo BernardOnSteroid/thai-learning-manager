@@ -410,3 +410,161 @@ export async function updateSettings(
     DO UPDATE SET value = ${value}
   `;
 }
+
+// ============ User Management ============
+
+export interface UserRecord {
+  id: string
+  email: string
+  password_hash: string
+  name?: string | null
+  preferences?: string | null
+  created_at?: string
+  last_login?: string | null
+  is_active?: number
+}
+
+/**
+ * Get user by email
+ */
+export async function getUserByEmail(
+  databaseUrl: string,
+  email: string
+): Promise<UserRecord | null> {
+  const sql = getDbClient(databaseUrl)
+  const result = await sql`SELECT * FROM users WHERE email = ${email} LIMIT 1`
+  return result.length > 0 ? result[0] as UserRecord : null
+}
+
+/**
+ * Get user by ID
+ */
+export async function getUserById(
+  databaseUrl: string,
+  userId: string
+): Promise<UserRecord | null> {
+  const sql = getDbClient(databaseUrl)
+  const result = await sql`SELECT * FROM users WHERE id = ${userId} LIMIT 1`
+  return result.length > 0 ? result[0] as UserRecord : null
+}
+
+/**
+ * Create a new user
+ */
+export async function createUser(
+  databaseUrl: string,
+  user: {
+    id: string
+    email: string
+    password_hash: string
+    name?: string | null
+  }
+): Promise<void> {
+  const sql = getDbClient(databaseUrl)
+  await sql`
+    INSERT INTO users (id, email, password_hash, name, preferences, is_active)
+    VALUES (${user.id}, ${user.email}, ${user.password_hash}, ${user.name || null}, '{}', 1)
+  `
+}
+
+/**
+ * Update user's last login timestamp
+ */
+export async function updateUserLastLogin(
+  databaseUrl: string,
+  userId: string
+): Promise<void> {
+  const sql = getDbClient(databaseUrl)
+  await sql`
+    UPDATE users 
+    SET last_login = CURRENT_TIMESTAMP 
+    WHERE id = ${userId}
+  `
+}
+
+/**
+ * Get user's progress for an entry
+ */
+export async function getUserProgress(
+  databaseUrl: string,
+  userId: string,
+  entryId: string
+): Promise<any | null> {
+  const sql = getDbClient(databaseUrl)
+  const result = await sql`
+    SELECT * FROM user_progress 
+    WHERE user_id = ${userId} AND entry_id = ${entryId}
+    LIMIT 1
+  `
+  return result.length > 0 ? result[0] : null
+}
+
+/**
+ * Create or update user progress for an entry
+ */
+export async function upsertUserProgress(
+  databaseUrl: string,
+  progress: {
+    user_id: string
+    entry_id: string
+    state?: string
+    mastery_level?: number
+    last_reviewed?: string
+    next_review?: string
+    review_count?: number
+    easy_count?: number
+    hard_count?: number
+  }
+): Promise<void> {
+  const sql = getDbClient(databaseUrl)
+  
+  await sql`
+    INSERT INTO user_progress (
+      user_id, entry_id, state, mastery_level, last_reviewed, next_review,
+      review_count, easy_count, hard_count
+    )
+    VALUES (
+      ${progress.user_id},
+      ${progress.entry_id},
+      ${progress.state || 'new'},
+      ${progress.mastery_level || 0},
+      ${progress.last_reviewed || null},
+      ${progress.next_review || null},
+      ${progress.review_count || 0},
+      ${progress.easy_count || 0},
+      ${progress.hard_count || 0}
+    )
+    ON CONFLICT (user_id, entry_id) DO UPDATE SET
+      state = EXCLUDED.state,
+      mastery_level = EXCLUDED.mastery_level,
+      last_reviewed = EXCLUDED.last_reviewed,
+      next_review = EXCLUDED.next_review,
+      review_count = EXCLUDED.review_count,
+      easy_count = EXCLUDED.easy_count,
+      hard_count = EXCLUDED.hard_count,
+      updated_at = CURRENT_TIMESTAMP
+  `
+}
+
+/**
+ * Get all progress entries for a user (for dashboard stats)
+ */
+export async function getUserProgressStats(
+  databaseUrl: string,
+  userId: string
+): Promise<any[]> {
+  const sql = getDbClient(databaseUrl)
+  const result = await sql`
+    SELECT 
+      up.*,
+      e.thai_script,
+      e.meaning,
+      e.cefr_level,
+      e.entry_type
+    FROM user_progress up
+    JOIN entries e ON up.entry_id = e.id
+    WHERE up.user_id = ${userId}
+    ORDER BY up.updated_at DESC
+  `
+  return result as any[]
+}

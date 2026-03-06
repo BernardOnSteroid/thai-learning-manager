@@ -7,6 +7,7 @@ import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
 import * as db from './db'
 import * as ai from './ai'
+import * as auth from './auth'
 
 // Version constant
 const VERSION = '1.0.0-thai'
@@ -17,10 +18,42 @@ type Bindings = {
   GEMINI_API_KEY?: string
 }
 
-const app = new Hono<{ Bindings: Bindings }>()
+// Variables stored in context
+type Variables = {
+  userId: string
+}
+
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>()
 
 // Enable CORS for API routes
 app.use('/api/*', cors())
+
+// Authentication middleware - protects API routes (except auth, health, version)
+app.use('/api/*', async (c, next) => {
+  // Skip auth for public endpoints
+  const path = new URL(c.req.url).pathname
+  const publicPaths = ['/api/auth/', '/api/health', '/api/version']
+  
+  if (publicPaths.some(p => path.startsWith(p))) {
+    return await next()
+  }
+  
+  // Extract and verify JWT token
+  const token = auth.extractToken(c.req.header('Authorization'))
+  if (!token) {
+    return c.json({ error: 'Unauthorized - No token provided' }, 401)
+  }
+  
+  const payload = auth.verifyToken(token)
+  if (!payload) {
+    return c.json({ error: 'Unauthorized - Invalid or expired token' }, 401)
+  }
+  
+  // Store userId in context for use in route handlers
+  c.set('userId', payload.userId)
+  
+  await next()
+})
 
 // Serve static files
 app.use('/static/*', serveStatic({ root: './' }))
@@ -51,6 +84,155 @@ app.get('/api/version', (c) => {
     language: 'Thai',
     levels: 'CEFR (A1-C2)'
   })
+})
+
+// ============ Authentication ============
+
+// Register new user
+app.post('/api/auth/register', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const { email, password, name } = await c.req.json()
+
+    // Validate input
+    if (!email || !password) {
+      return c.json({ error: 'Email and password are required' }, 400)
+    }
+
+    if (!auth.validateEmail(email)) {
+      return c.json({ error: 'Invalid email format' }, 400)
+    }
+
+    const passwordCheck = auth.validatePassword(password)
+    if (!passwordCheck.valid) {
+      return c.json({ error: passwordCheck.message }, 400)
+    }
+
+    // Check if user already exists
+    const existingUser = await db.getUserByEmail(DATABASE_URL, email)
+    if (existingUser) {
+      return c.json({ error: 'Email already registered' }, 409)
+    }
+
+    // Hash password and create user
+    const passwordHash = await auth.hashPassword(password)
+    const userId = auth.generateUserId()
+
+    await db.createUser(DATABASE_URL, {
+      id: userId,
+      email,
+      password_hash: passwordHash,
+      name: name || null
+    })
+
+    // Create JWT token
+    const token = auth.createToken({ userId, email })
+
+    // Return user data (without password)
+    return c.json({
+      token,
+      user: {
+        id: userId,
+        email,
+        name: name || null
+      }
+    }, 201)
+  } catch (error: any) {
+    console.error('Error registering user:', error)
+    return c.json({ error: 'Failed to register user', details: error.message }, 500)
+  }
+})
+
+// Login user
+app.post('/api/auth/login', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const { email, password } = await c.req.json()
+
+    // Validate input
+    if (!email || !password) {
+      return c.json({ error: 'Email and password are required' }, 400)
+    }
+
+    // Get user from database
+    const user = await db.getUserByEmail(DATABASE_URL, email)
+    if (!user) {
+      return c.json({ error: 'Invalid email or password' }, 401)
+    }
+
+    // Check if user is active
+    if (user.is_active === 0) {
+      return c.json({ error: 'Account is disabled' }, 403)
+    }
+
+    // Verify password
+    const isValid = await auth.verifyPassword(password, user.password_hash)
+    if (!isValid) {
+      return c.json({ error: 'Invalid email or password' }, 401)
+    }
+
+    // Update last login
+    await db.updateUserLastLogin(DATABASE_URL, user.id)
+
+    // Create JWT token
+    const token = auth.createToken({ userId: user.id, email: user.email })
+
+    // Return user data (without password)
+    return c.json({
+      token,
+      user: auth.sanitizeUser(user)
+    })
+  } catch (error: any) {
+    console.error('Error logging in:', error)
+    return c.json({ error: 'Failed to login', details: error.message }, 500)
+  }
+})
+
+// Verify token and get current user
+app.get('/api/auth/me', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    // Extract and verify token
+    const token = auth.extractToken(c.req.header('Authorization'))
+    if (!token) {
+      return c.json({ error: 'No token provided' }, 401)
+    }
+
+    const payload = auth.verifyToken(token)
+    if (!payload) {
+      return c.json({ error: 'Invalid or expired token' }, 401)
+    }
+
+    // Get user from database
+    const user = await db.getUserById(DATABASE_URL, payload.userId)
+    if (!user) {
+      return c.json({ error: 'User not found' }, 404)
+    }
+
+    // Check if user is active
+    if (user.is_active === 0) {
+      return c.json({ error: 'Account is disabled' }, 403)
+    }
+
+    return c.json({
+      user: auth.sanitizeUser(user)
+    })
+  } catch (error: any) {
+    console.error('Error verifying token:', error)
+    return c.json({ error: 'Failed to verify token', details: error.message }, 500)
+  }
 })
 
 // ============ Entries CRUD ============
@@ -216,8 +398,51 @@ app.get('/api/dashboard/stats', async (c) => {
   }
 
   try {
-    const stats = await db.getDashboardStats(DATABASE_URL)
-    return c.json(stats)
+    const userId = c.get('userId') // From auth middleware
+    const sql = db.getDbClient(DATABASE_URL)
+    
+    // Get total entries (shared across all users)
+    const totalResult = await sql`SELECT COUNT(*) as count FROM entries WHERE archived = false`
+    const totalEntries = parseInt(totalResult[0].count)
+    
+    // Get user's progress stats
+    const progressStats = await db.getUserProgressStats(DATABASE_URL, userId)
+    
+    // Calculate stats by state
+    const newCount = totalEntries - progressStats.length
+    const learningCount = progressStats.filter((p: any) => p.state === 'learning').length
+    const masteredCount = progressStats.filter((p: any) => p.state === 'mastered').length
+    
+    // Calculate due for review
+    const dueCount = progressStats.filter((p: any) => 
+      p.next_review && new Date(p.next_review) <= new Date() && p.state !== 'mastered'
+    ).length
+    
+    // Calculate stats by type
+    const byType: any = {}
+    progressStats.forEach((p: any) => {
+      byType[p.entry_type] = (byType[p.entry_type] || 0) + 1
+    })
+    
+    // Calculate stats by CEFR level
+    const byCefr: any = {}
+    progressStats.forEach((p: any) => {
+      byCefr[p.cefr_level] = (byCefr[p.cefr_level] || 0) + 1
+    })
+    
+    return c.json({
+      totalEntries,
+      learningProgress: progressStats.length,
+      dueForReview: dueCount,
+      progressPercent: totalEntries > 0 ? Math.round((progressStats.length / totalEntries) * 100) : 0,
+      byState: {
+        new: newCount,
+        learning: learningCount,
+        mastered: masteredCount
+      },
+      byType,
+      byCefr
+    })
   } catch (error: any) {
     console.error('Error fetching dashboard stats:', error)
     return c.json({ error: 'Failed to fetch stats', details: error.message }, 500)
@@ -695,22 +920,44 @@ app.get('/api/revision/due', async (c) => {
   }
 
   try {
+    const userId = c.get('userId') // From auth middleware
     const limit = parseInt(c.req.query('limit') || '20')
     const cefrLevel = c.req.query('cefr_level')
     const entryType = c.req.query('entry_type')
     
-    const items = await db.getDueForReview(DATABASE_URL, limit)
+    // Get entries due for review for this user
+    const sql = db.getDbClient(DATABASE_URL)
     
-    // Filter by CEFR level if specified
-    let filtered = items
+    let query = sql`
+      SELECT e.*, up.state, up.mastery_level, up.next_review, up.review_count
+      FROM entries e
+      INNER JOIN user_progress up ON e.id = up.entry_id
+      WHERE up.user_id = ${userId}
+        AND up.next_review <= CURRENT_TIMESTAMP
+        AND up.state != 'mastered'
+    `
+    
     if (cefrLevel) {
-      filtered = items.filter((item: any) => item.cefr_level === cefrLevel)
-    }
-    if (entryType) {
-      filtered = filtered.filter((item: any) => item.entry_type === entryType)
+      query = sql`
+        SELECT e.*, up.state, up.mastery_level, up.next_review, up.review_count
+        FROM entries e
+        INNER JOIN user_progress up ON e.id = up.entry_id
+        WHERE up.user_id = ${userId}
+          AND up.next_review <= CURRENT_TIMESTAMP
+          AND up.state != 'mastered'
+          AND e.cefr_level = ${cefrLevel}
+      `
     }
     
-    return c.json(filtered)
+    const result = await query
+    
+    // Filter by entry type if specified
+    let filtered = result
+    if (entryType) {
+      filtered = result.filter((item: any) => item.entry_type === entryType)
+    }
+    
+    return c.json(filtered.slice(0, limit))
   } catch (error: any) {
     console.error('Error fetching due items:', error)
     return c.json({ error: 'Failed to fetch due items', details: error.message }, 500)
@@ -724,6 +971,7 @@ app.post('/api/revision/submit', async (c) => {
   }
 
   try {
+    const userId = c.get('userId') // From auth middleware
     const { entry_id, quality } = await c.req.json()
     
     if (!entry_id || quality === undefined) {
@@ -734,38 +982,58 @@ app.post('/api/revision/submit', async (c) => {
       return c.json({ error: 'Quality must be between 0 and 5' }, 400)
     }
     
-    // Get or create learning progress
-    let progress = await db.getLearningProgress(DATABASE_URL, entry_id)
+    // Get or create user progress
+    let progress = await db.getUserProgress(DATABASE_URL, userId, entry_id)
     
     if (!progress) {
-      progress = await db.createLearningProgress(DATABASE_URL, entry_id)
+      // Create new progress
+      await db.upsertUserProgress(DATABASE_URL, {
+        user_id: userId,
+        entry_id: entry_id,
+        state: 'learning',
+        mastery_level: 0,
+        review_count: 0
+      })
+      progress = await db.getUserProgress(DATABASE_URL, userId, entry_id)
     }
     
-    // Calculate new SRS values
-    const srsResult = calculateSRS(
-      quality,
-      progress.srs_level,
-      progress.ease_factor,
-      progress.interval
-    )
+    // Simple SRS calculation
+    const currentMastery = progress.mastery_level || 0
+    const newMastery = quality >= 3 ? currentMastery + 1 : Math.max(0, currentMastery - 1)
+    
+    // Calculate next review interval (simple algorithm)
+    let intervalDays = 1
+    if (newMastery >= 1) intervalDays = 2
+    if (newMastery >= 2) intervalDays = 4
+    if (newMastery >= 3) intervalDays = 7
+    if (newMastery >= 4) intervalDays = 14
+    if (newMastery >= 5) intervalDays = 30
+    
+    const nextReview = new Date(Date.now() + intervalDays * 24 * 60 * 60 * 1000).toISOString()
+    
+    // Determine state
+    let state = 'learning'
+    if (newMastery >= 5) state = 'mastered'
     
     // Update progress
-    const updatedProgress = await db.updateLearningProgress(DATABASE_URL, entry_id, {
-      srs_level: srsResult.newSrsLevel,
-      ease_factor: srsResult.newEaseFactor,
-      interval: srsResult.newInterval,
-      next_review: srsResult.nextReviewDate,
-      last_reviewed: new Date(),
-      correct_count: quality >= 3 ? progress.correct_count + 1 : progress.correct_count,
-      incorrect_count: quality < 3 ? progress.incorrect_count + 1 : progress.incorrect_count
+    await db.upsertUserProgress(DATABASE_URL, {
+      user_id: userId,
+      entry_id: entry_id,
+      state: state,
+      mastery_level: newMastery,
+      last_reviewed: new Date().toISOString(),
+      next_review: nextReview,
+      review_count: (progress.review_count || 0) + 1,
+      easy_count: quality >= 4 ? (progress.easy_count || 0) + 1 : (progress.easy_count || 0),
+      hard_count: quality < 3 ? (progress.hard_count || 0) + 1 : (progress.hard_count || 0)
     })
     
     return c.json({
       success: true,
-      srs_level: srsResult.newSrsLevel,
-      interval: srsResult.newInterval,
-      next_review: srsResult.nextReviewDate,
-      progress: updatedProgress
+      mastery_level: newMastery,
+      interval_days: intervalDays,
+      next_review: nextReview,
+      state: state
     })
   } catch (error: any) {
     console.error('Error submitting review:', error)
@@ -780,8 +1048,22 @@ app.get('/api/revision/stats', async (c) => {
   }
 
   try {
-    const stats = await db.getStats(DATABASE_URL)
-    return c.json(stats)
+    const userId = c.get('userId') // From auth middleware
+    const progressStats = await db.getUserProgressStats(DATABASE_URL, userId)
+    
+    // Calculate stats
+    const totalLearning = progressStats.length
+    const dueNow = progressStats.filter((p: any) => 
+      p.next_review && new Date(p.next_review) <= new Date()
+    ).length
+    const mastered = progressStats.filter((p: any) => p.state === 'mastered').length
+    
+    return c.json({
+      total_learning: totalLearning,
+      due_now: dueNow,
+      mastered: mastered,
+      learning: totalLearning - mastered
+    })
   } catch (error: any) {
     console.error('Error fetching revision stats:', error)
     return c.json({ error: 'Failed to fetch stats', details: error.message }, 500)
@@ -797,23 +1079,23 @@ app.get('/api/learning/new', async (c) => {
   }
 
   try {
+    const userId = c.get('userId') // From auth middleware
     const limit = parseInt(c.req.query('limit') || '10')
     const cefrLevel = c.req.query('cefr_level') || 'A1'
     
-    // Get entries that don't have learning progress yet
+    // Get entries that don't have progress yet for this user
     const sql = db.getDbClient(DATABASE_URL)
-    const result = await sql.query(
-      `SELECT e.* FROM entries e
-       LEFT JOIN learning_progress lp ON e.id = lp.entry_id
-       WHERE lp.id IS NULL
-         AND e.archived = false
-         AND e.cefr_level = $1
-       ORDER BY e.difficulty ASC, e.created_at ASC
-       LIMIT $2`,
-      [cefrLevel, limit]
-    )
+    const result = await sql`
+      SELECT e.* FROM entries e
+      LEFT JOIN user_progress up ON e.id = up.entry_id AND up.user_id = ${userId}
+      WHERE up.id IS NULL
+        AND e.archived = false
+        AND e.cefr_level = ${cefrLevel}
+      ORDER BY e.difficulty ASC, e.created_at ASC
+      LIMIT ${limit}
+    `
     
-    return c.json(result.rows)
+    return c.json(result)
   } catch (error: any) {
     console.error('Error fetching new items:', error)
     return c.json({ error: 'Failed to fetch new items', details: error.message }, 500)
@@ -827,18 +1109,27 @@ app.post('/api/learning/start', async (c) => {
   }
 
   try {
+    const userId = c.get('userId') // From auth middleware
     const { entry_id } = await c.req.json()
     
     if (!entry_id) {
       return c.json({ error: 'Missing entry_id' }, 400)
     }
     
-    // Create learning progress
-    const progress = await db.createLearningProgress(DATABASE_URL, entry_id)
+    // Create user progress with state 'learning'
+    await db.upsertUserProgress(DATABASE_URL, {
+      user_id: userId,
+      entry_id: entry_id,
+      state: 'learning',
+      mastery_level: 0,
+      last_reviewed: new Date().toISOString(),
+      next_review: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // +1 day
+      review_count: 1
+    })
     
     return c.json({
       success: true,
-      progress
+      message: 'Learning started'
     })
   } catch (error: any) {
     console.error('Error starting learning:', error)
@@ -855,7 +1146,39 @@ app.get('/api/cefr/progression', async (c) => {
   }
 
   try {
-    const progression = await db.getCEFRProgression(DATABASE_URL)
+    const userId = c.get('userId') // From auth middleware
+    const sql = db.getDbClient(DATABASE_URL)
+    
+    // Get all entries by CEFR level
+    const allEntries = await sql`
+      SELECT cefr_level, COUNT(*) as total
+      FROM entries
+      WHERE archived = false
+      GROUP BY cefr_level
+    `
+    
+    // Get user's mastered entries by CEFR level
+    const masteredEntries = await sql`
+      SELECT e.cefr_level, COUNT(*) as mastered
+      FROM entries e
+      INNER JOIN user_progress up ON e.id = up.entry_id
+      WHERE up.user_id = ${userId} AND up.state = 'mastered'
+      GROUP BY e.cefr_level
+    `
+    
+    // Build progression object
+    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+    const progression: any = {}
+    
+    levels.forEach(level => {
+      const total = allEntries.find((e: any) => e.cefr_level === level)?.total || 0
+      const mastered = masteredEntries.find((e: any) => e.cefr_level === level)?.mastered || 0
+      progression[level] = {
+        total,
+        mastered,
+        percentage: total > 0 ? Math.round((mastered / total) * 100) : 0
+      }
+    })
     
     // Calculate overall progress
     let totalEntries = 0
@@ -872,7 +1195,6 @@ app.get('/api/cefr/progression', async (c) => {
     
     // Determine current focus level (first level not mastered)
     let currentLevel = 'A1'
-    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
     for (const level of levels) {
       if (progression[level].percentage < 80) {
         currentLevel = level
