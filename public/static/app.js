@@ -3,6 +3,8 @@
 // Build Date: 2026-03-05
 
 console.log('🇹🇭 Thai Learning Manager Frontend v1.0.0 loaded');
+console.log('📍 Script execution started');
+console.log('🌐 Document ready state:', document.readyState);
 
 // ============ Configuration ============
 
@@ -1919,9 +1921,15 @@ function initializeApp() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 Initializing Thai Learning Manager...');
+  console.log('📦 Current page:', currentPage);
+  console.log('👤 Current user:', currentUser);
+  console.log('🔑 Has auth token:', !!getAuthToken());
   
   // Check authentication first
+  console.log('🔐 Checking authentication...');
   const isAuthenticated = await checkAuth();
+  console.log('✅ Authentication result:', isAuthenticated);
+  
   if (!isAuthenticated) {
     console.log('❌ Not authenticated, showing login page');
     return; // showLoginPage() already called by checkAuth
