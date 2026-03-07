@@ -1121,6 +1121,12 @@ function renderEntriesList(entries) {
               </div>
               
               <div class="flex space-x-2 ml-4">
+                <button onclick="speakThai('${entry.thai_script.replace(/'/g, "\\'")}', 'speak-${entry.id}')" 
+                        id="speak-${entry.id}"
+                        class="p-2 text-purple-600 hover:bg-purple-50 rounded"
+                        title="Listen to pronunciation">
+                  <i class="fas fa-volume-up"></i>
+                </button>
                 <button onclick="editEntry('${entry.id}')" 
                         class="p-2 text-blue-600 hover:bg-blue-50 rounded"
                         title="Edit">
@@ -1429,6 +1435,14 @@ function renderLearningCard() {
             <span class="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
             <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
           </div>
+          <div class="mb-4">
+            <button onclick="event.stopPropagation(); speakThai('${item.thai_script.replace(/'/g, "\\'")}', 'speak-front-${item.id}')" 
+                    id="speak-front-${item.id}"
+                    class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold inline-flex items-center"
+                    title="Listen to pronunciation">
+              <i class="fas fa-volume-up mr-2"></i>Listen
+            </button>
+          </div>
           <div class="text-6xl font-bold text-gray-800 thai-text mb-4">${item.thai_script}</div>
           <div class="text-3xl text-gray-600 mb-2">${item.romanization}</div>
           <div class="text-2xl mb-4">${toneEmojis[item.tone]} ${item.tone} tone</div>
@@ -1439,6 +1453,14 @@ function renderLearningCard() {
           <div class="mb-4">
             <span class="px-3 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
             <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
+          </div>
+          <div class="mb-4">
+            <button onclick="event.stopPropagation(); speakThai('${item.thai_script.replace(/'/g, "\\'")}', 'speak-back-${item.id}')" 
+                    id="speak-back-${item.id}"
+                    class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg inline-flex items-center"
+                    title="Listen to pronunciation">
+              <i class="fas fa-volume-up mr-2"></i>Listen
+            </button>
           </div>
           <div class="text-4xl font-bold text-gray-800 thai-text mb-2">${item.thai_script}</div>
           <div class="text-2xl text-gray-600 mb-4">${item.romanization}</div>
@@ -1690,6 +1712,14 @@ function renderReviewCard() {
             <span class="px-3 py-1 bg-orange-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
             <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
           </div>
+          <div class="mb-4">
+            <button onclick="event.stopPropagation(); speakThai('${item.thai_script.replace(/'/g, "\\'")}', 'speak-review-front-${item.id}')" 
+                    id="speak-review-front-${item.id}"
+                    class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold inline-flex items-center"
+                    title="Listen to pronunciation">
+              <i class="fas fa-volume-up mr-2"></i>Listen
+            </button>
+          </div>
           <div class="text-6xl font-bold text-gray-800 thai-text mb-4">${item.thai_script}</div>
           <div class="text-3xl text-gray-600">${item.romanization}</div>
           <p class="text-gray-500 text-sm mt-6">Try to recall the meaning, then click to check</p>
@@ -1699,6 +1729,14 @@ function renderReviewCard() {
           <div class="mb-4">
             <span class="px-3 py-1 bg-blue-600 text-white text-sm font-semibold rounded-full">${item.cefr_level}</span>
             <span class="ml-2 px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">${item.entry_type}</span>
+          </div>
+          <div class="mb-4">
+            <button onclick="event.stopPropagation(); speakThai('${item.thai_script.replace(/'/g, "\\'")}', 'speak-review-back-${item.id}')" 
+                    id="speak-review-back-${item.id}"
+                    class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg inline-flex items-center"
+                    title="Listen to pronunciation">
+              <i class="fas fa-volume-up mr-2"></i>Listen
+            </button>
           </div>
           <div class="text-4xl font-bold text-gray-800 thai-text mb-2">${item.thai_script}</div>
           <div class="text-2xl text-gray-600 mb-4">${item.romanization}</div>

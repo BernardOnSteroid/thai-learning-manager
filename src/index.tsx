@@ -897,6 +897,7 @@ app.get('/', (c) => {
         </footer>
 
         <!-- Load Scripts -->
+        <script src="/static/thai-pronunciation.js"></script>
         <script src="/static/app.js"></script>
     </body>
     </html>
