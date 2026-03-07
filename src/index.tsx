@@ -1,5 +1,5 @@
 // Thai Learning Manager - Backend API
-// Version: 1.0.0-thai
+// Version: 1.5.0
 // Database: Neon PostgreSQL with CEFR levels and Thai tones
 
 import { Hono } from 'hono'
@@ -9,7 +9,7 @@ import * as ai from './ai'
 import * as auth from './auth'
 
 // Version constant
-const VERSION = '1.0.0-thai'
+const VERSION = '1.5.0'
 
 // Bindings for Cloudflare environment variables
 type Bindings = {
@@ -665,10 +665,13 @@ app.get('/', (c) => {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-16">
                     <div class="flex items-center">
-                        <h1 class="text-2xl font-bold text-gray-800 thai-text">
-                            <i class="fas fa-language text-blue-600 mr-2"></i>
-                            🇹🇭 Thai Learning Manager
-                        </h1>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-800 thai-text">
+                                <i class="fas fa-language text-blue-600 mr-2"></i>
+                                🇹🇭 Thai Learning Manager
+                            </h1>
+                            <p class="text-xs text-gray-500 ml-9">v1.5.0</p>
+                        </div>
                     </div>
                     
                     <!-- Desktop Navigation -->
