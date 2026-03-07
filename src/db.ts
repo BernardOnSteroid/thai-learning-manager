@@ -568,3 +568,93 @@ export async function getUserProgressStats(
   `
   return result as any[]
 }
+
+
+// ============ Driving Mode Helper Functions ============
+
+/**
+ * Get random entries with optional CEFR level filter
+ */
+export async function getRandomEntries(
+  databaseUrl: string,
+  options: { limit?: number; cefr_level?: string } = {}
+): Promise<ThaiEntry[]> {
+  const sql = getDbClient(databaseUrl)
+  const limit = options.limit || 20
+  
+  let result
+  if (options.cefr_level) {
+    result = await sql`
+      SELECT * FROM entries 
+      WHERE archived = false AND cefr_level = ${options.cefr_level}
+      ORDER BY RANDOM()
+      LIMIT ${limit}
+    `
+  } else {
+    result = await sql`
+      SELECT * FROM entries 
+      WHERE archived = false
+      ORDER BY RANDOM()
+      LIMIT ${limit}
+    `
+  }
+  
+  return result
+}
+
+/**
+ * Get user learning progress with entries (for driving mode)
+ */
+export async function getUserLearningProgressWithEntries(
+  databaseUrl: string,
+  userId: string,
+  options: { limit?: number; sort?: string } = {}
+): Promise<Array<ThaiEntry & { progress: any }>> {
+  const sql = getDbClient(databaseUrl)
+  const limit = options.limit || 20
+  
+  let orderBy = "up.updated_at DESC" // default: recently learned
+  if (options.sort === "recently_reviewed") {
+    orderBy = "up.last_reviewed DESC NULLS LAST"
+  } else if (options.sort === "mastery") {
+    orderBy = "up.mastery_level DESC"
+  }
+  
+  // Use string interpolation for ORDER BY since we control the values
+  const query = `
+    SELECT e.*, up.state, up.mastery_level, up.last_reviewed, up.next_review
+    FROM entries e
+    INNER JOIN user_progress up ON e.id = up.entry_id
+    WHERE up.user_id = '${userId}' AND e.archived = false
+    ORDER BY ${orderBy}
+    LIMIT ${limit}
+  `
+  
+  const result = await sql(query)
+  return result as any[]
+}
+
+/**
+ * Get due reviews for a user (for driving mode)
+ */
+export async function getUserDueReviews(
+  databaseUrl: string,
+  userId: string,
+  limit: number = 20
+): Promise<Array<ThaiEntry & { progress: any }>> {
+  const sql = getDbClient(databaseUrl)
+  
+  const result = await sql`
+    SELECT e.*, up.state, up.mastery_level, up.last_reviewed, up.next_review
+    FROM entries e
+    INNER JOIN user_progress up ON e.id = up.entry_id
+    WHERE up.user_id = ${userId} 
+      AND up.next_review <= NOW()
+      AND e.archived = false
+    ORDER BY up.next_review ASC
+    LIMIT ${limit}
+  `
+  
+  return result as any[]
+}
+

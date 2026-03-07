@@ -493,6 +493,66 @@ app.post('/api/settings', async (c) => {
   }
 })
 
+// ============ User Progress (for Driving Mode) ============
+
+// Get user's learning progress - recently learned items
+app.get('/api/user-progress', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const userId = c.get('userId')
+    const limit = parseInt(c.req.query('limit') || '20')
+    const sort = c.req.query('sort') || 'recently_learned'
+
+    const progress = await db.getUserLearningProgressWithEntries(DATABASE_URL, userId, { limit, sort })
+    return c.json(progress)
+  } catch (error: any) {
+    console.error('Error fetching user progress:', error)
+    return c.json({ error: 'Failed to fetch user progress', details: error.message }, 500)
+  }
+})
+
+// Get due reviews for the user
+app.get('/api/user-progress/due', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const userId = c.get('userId')
+    const limit = parseInt(c.req.query('limit') || '20')
+
+    const dueItems = await db.getUserDueReviews(DATABASE_URL, userId, limit)
+    return c.json(dueItems)
+  } catch (error: any) {
+    console.error('Error fetching due reviews:', error)
+    return c.json({ error: 'Failed to fetch due reviews', details: error.message }, 500)
+  }
+})
+
+// Get entries with random sorting (for driving mode)
+app.get('/api/entries/random', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const limit = parseInt(c.req.query('limit') || '20')
+    const cefrLevel = c.req.query('cefr_level')
+
+    const entries = await db.getRandomEntries(DATABASE_URL, { limit, cefr_level: cefrLevel })
+    return c.json(entries)
+  } catch (error: any) {
+    console.error('Error fetching random entries:', error)
+    return c.json({ error: 'Failed to fetch random entries', details: error.message }, 500)
+  }
+})
+
 // ============ API Documentation ============
 
 app.get('/docs', (c) => {
@@ -625,6 +685,9 @@ app.get('/', (c) => {
                         <a href="#" data-page="review" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
                             <i class="fas fa-brain mr-1"></i>Review
                         </a>
+                        <a href="#" data-page="driving" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
+                            <i class="fas fa-car mr-1"></i>Driving Mode
+                        </a>
                         <a href="/docs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
                             <i class="fas fa-book mr-1"></i>Docs
                         </a>
@@ -670,6 +733,9 @@ app.get('/', (c) => {
                     </a>
                     <a href="#" data-page="review" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
                         <i class="fas fa-brain mr-2"></i>Review
+                    </a>
+                    <a href="#" data-page="driving" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
+                        <i class="fas fa-car mr-2"></i>Driving Mode
                     </a>
                     <a href="/docs" class="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-blue-600">
                         <i class="fas fa-book mr-2"></i>API Docs
@@ -883,6 +949,160 @@ app.get('/', (c) => {
                 <div id="review-content"></div>
             </div>
 
+            <!-- Driving Mode Page -->
+            <div id="driving-page" class="hidden">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-car text-purple-600 mr-2"></i>
+                        Driving Mode
+                    </h2>
+                    <p class="text-gray-600">Hands-free audio learning for Thai vocabulary</p>
+                </div>
+
+                <!-- Mode Selection -->
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <h3 class="text-xl font-bold mb-4">
+                        <i class="fas fa-list text-purple-600 mr-2"></i>
+                        Choose Learning Mode
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <button onclick="initializeDrivingMode('recent')" class="p-4 border-2 border-purple-300 rounded-lg hover:bg-purple-50 text-left">
+                            <div class="text-2xl mb-2">🕐</div>
+                            <div class="font-bold text-lg">Recently Learned</div>
+                            <div class="text-gray-600 text-sm">Review your most recent words</div>
+                        </button>
+                        <button onclick="initializeDrivingMode('due')" class="p-4 border-2 border-orange-300 rounded-lg hover:bg-orange-50 text-left">
+                            <div class="text-2xl mb-2">⏰</div>
+                            <div class="font-bold text-lg">Due for Review</div>
+                            <div class="text-gray-600 text-sm">Practice words that need review</div>
+                        </button>
+                        <button onclick="initializeDrivingMode('random')" class="p-4 border-2 border-blue-300 rounded-lg hover:bg-blue-50 text-left">
+                            <div class="text-2xl mb-2">🎲</div>
+                            <div class="font-bold text-lg">Random Words</div>
+                            <div class="text-gray-600 text-sm">Explore random vocabulary</div>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Settings Panel -->
+                <div class="bg-white rounded-lg shadow p-6 mb-6">
+                    <h3 class="text-xl font-bold mb-4">
+                        <i class="fas fa-cog text-purple-600 mr-2"></i>
+                        Settings
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Speed Control -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                <i class="fas fa-gauge mr-1"></i>
+                                Speech Speed
+                            </label>
+                            <select id="driving-speed" onchange="updateDrivingModeSpeed(this.value)" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                                <option value="0.7">Slow (0.7x)</option>
+                                <option value="0.9" selected>Normal (0.9x)</option>
+                                <option value="1.0">Standard (1.0x)</option>
+                                <option value="1.2">Fast (1.2x)</option>
+                            </select>
+                        </div>
+
+                        <!-- Toggle Settings -->
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" checked onchange="toggleDrivingModeSetting('repeatWord')" class="rounded">
+                                <span class="text-sm">Repeat Thai word at end</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input type="checkbox" checked onchange="toggleDrivingModeSetting('includeExamples')" class="rounded">
+                                <span class="text-sm">Include example sentences</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Player Controls -->
+                <div class="bg-purple-50 rounded-lg shadow-lg p-6 mb-6">
+                    <div class="mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-gray-700">Progress</span>
+                            <span id="driving-progress-text" class="text-sm text-gray-600">0 / 0</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-3">
+                            <div id="driving-progress-bar" class="bg-purple-600 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Current Word Display -->
+                    <div id="driving-current-word" class="text-center py-8 mb-6 bg-white rounded-lg border-2 border-purple-200">
+                        <div class="text-gray-400 text-xl">
+                            <i class="fas fa-car text-3xl mb-2"></i>
+                            <p>Select a mode above to start</p>
+                        </div>
+                    </div>
+
+                    <!-- Control Buttons -->
+                    <div class="flex justify-center items-center space-x-3">
+                        <button id="driving-prev-btn" onclick="previousWord()" disabled class="bg-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-step-backward"></i>
+                        </button>
+                        
+                        <button id="driving-play-btn" onclick="resumeDrivingMode()" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700">
+                            <i class="fas fa-play mr-2"></i>
+                            Play
+                        </button>
+                        
+                        <button id="driving-pause-btn" onclick="pauseDrivingMode()" class="hidden bg-orange-500 text-white px-6 py-3 rounded-lg hover:bg-orange-600">
+                            <i class="fas fa-pause mr-2"></i>
+                            Pause
+                        </button>
+                        
+                        <button id="driving-stop-btn" onclick="stopDrivingMode()" disabled class="bg-red-500 text-white px-4 py-3 rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                        
+                        <button id="driving-skip-btn" onclick="skipWord()" disabled class="bg-gray-300 text-gray-700 px-4 py-3 rounded-lg hover:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i class="fas fa-step-forward"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Safety Notice -->
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div class="flex items-start">
+                        <i class="fas fa-exclamation-triangle text-yellow-600 text-xl mr-3 mt-1"></i>
+                        <div>
+                            <h4 class="font-bold text-yellow-800 mb-1">Safety First</h4>
+                            <p class="text-sm text-yellow-700">
+                                If you're using this while driving, please ensure it's safe and legal in your jurisdiction. 
+                                Always keep your eyes on the road and hands on the wheel. Your safety is the priority.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- How It Works -->
+                <div class="bg-white rounded-lg shadow p-6 mt-6">
+                    <h3 class="text-xl font-bold mb-3">
+                        <i class="fas fa-info-circle text-purple-600 mr-2"></i>
+                        How It Works
+                    </h3>
+                    <ol class="list-decimal pl-6 space-y-2 text-gray-700">
+                        <li>Choose a learning mode (Recent, Due, or Random)</li>
+                        <li>The app will speak each Thai word clearly</li>
+                        <li>You'll hear the romanization (pronunciation guide)</li>
+                        <li>Then the English meaning</li>
+                        <li>Followed by tone information</li>
+                        <li>An example sentence (if available and enabled)</li>
+                        <li>And finally, the Thai word repeated</li>
+                    </ol>
+                    <div class="mt-4 p-3 bg-purple-50 rounded-lg">
+                        <p class="text-sm text-gray-700">
+                            <strong>Tip:</strong> This mode works best with headphones or your car's audio system. 
+                            Adjust the speech speed to match your comfort level.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             </div><!-- #app -->
         </main>
 
@@ -898,6 +1118,7 @@ app.get('/', (c) => {
 
         <!-- Load Scripts -->
         <script src="/static/thai-pronunciation.js"></script>
+        <script src="/static/driving-mode.js"></script>
         <script src="/static/app.js"></script>
     </body>
     </html>
