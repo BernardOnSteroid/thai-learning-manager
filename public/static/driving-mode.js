@@ -264,11 +264,21 @@ function updateDrivingModeUI() {
 // ============ Load Items for Driving Mode ============
 async function loadDrivingModeItems(mode) {
   try {
-    const token = localStorage.getItem('token');
+    // Try both token keys for compatibility
+    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    
+    // Debug logging
+    console.log('🔍 Driving Mode: Checking authentication');
+    console.log('🔑 Token from localStorage:', token ? 'exists (length: ' + token.length + ')' : 'NOT FOUND');
+    console.log('📦 All localStorage keys:', Object.keys(localStorage));
+    
     if (!token) {
+      console.error('❌ No authentication token found');
       showToast('Please login first', 'error');
       return [];
     }
+    
+    console.log('✅ Token found, loading items for mode:', mode);
 
     let endpoint = '';
     let items = [];

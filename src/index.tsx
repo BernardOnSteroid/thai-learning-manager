@@ -31,7 +31,7 @@ app.use('/api/*', cors())
 app.use('/api/*', async (c, next) => {
   // Skip auth for public endpoints
   const path = new URL(c.req.url).pathname
-  const publicPaths = ['/api/auth/', '/api/health', '/api/version']
+  const publicPaths = ['/api/auth/', '/api/health', '/api/version', '/api/entries/random']
   
   if (publicPaths.some(p => path.startsWith(p))) {
     return await next()
@@ -356,6 +356,26 @@ app.get('/api/entries', async (c) => {
   }
 })
 
+// Get entries with random sorting (for driving mode)
+// IMPORTANT: This must come BEFORE /api/entries/:id to avoid route collision
+app.get('/api/entries/random', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const limit = parseInt(c.req.query('limit') || '20')
+    const cefrLevel = c.req.query('cefr_level')
+
+    const entries = await db.getRandomEntries(DATABASE_URL, { limit, cefr_level: cefrLevel })
+    return c.json(entries)
+  } catch (error: any) {
+    console.error('Error fetching random entries:', error)
+    return c.json({ error: 'Failed to fetch random entries', details: error.message }, 500)
+  }
+})
+
 app.get('/api/entries/:id', async (c) => {
   const { DATABASE_URL } = c.env
   if (!DATABASE_URL) {
@@ -626,25 +646,6 @@ app.get('/api/user-progress/due', async (c) => {
   } catch (error: any) {
     console.error('Error fetching due reviews:', error)
     return c.json({ error: 'Failed to fetch due reviews', details: error.message }, 500)
-  }
-})
-
-// Get entries with random sorting (for driving mode)
-app.get('/api/entries/random', async (c) => {
-  const { DATABASE_URL } = c.env
-  if (!DATABASE_URL) {
-    return c.json({ error: 'DATABASE_URL not configured' }, 500)
-  }
-
-  try {
-    const limit = parseInt(c.req.query('limit') || '20')
-    const cefrLevel = c.req.query('cefr_level')
-
-    const entries = await db.getRandomEntries(DATABASE_URL, { limit, cefr_level: cefrLevel })
-    return c.json(entries)
-  } catch (error: any) {
-    console.error('Error fetching random entries:', error)
-    return c.json({ error: 'Failed to fetch random entries', details: error.message }, 500)
   }
 })
 
