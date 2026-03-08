@@ -1,5 +1,5 @@
 // Thai Learning Manager - Backend API
-// Version: 1.5.0
+// Version: 1.6.0
 // Database: Neon PostgreSQL with CEFR levels and Thai tones
 
 import { Hono } from 'hono'
@@ -9,7 +9,7 @@ import * as ai from './ai'
 import * as auth from './auth'
 
 // Version constant
-const VERSION = '1.5.0'
+const VERSION = '1.6.0'
 
 // Bindings for Cloudflare environment variables
 type Bindings = {
@@ -189,6 +189,101 @@ app.post('/api/auth/login', async (c) => {
   } catch (error: any) {
     console.error('Error logging in:', error)
     return c.json({ error: 'Failed to login', details: error.message }, 500)
+  }
+})
+
+// Request password reset
+app.post('/api/auth/forgot-password', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const { email } = await c.req.json()
+
+    // Validate input
+    if (!email) {
+      return c.json({ error: 'Email is required' }, 400)
+    }
+
+    if (!auth.validateEmail(email)) {
+      return c.json({ error: 'Invalid email format' }, 400)
+    }
+
+    // Check if user exists
+    const user = await db.getUserByEmail(DATABASE_URL, email)
+    
+    // Always return success even if user doesn't exist (security)
+    // This prevents email enumeration attacks
+    if (!user) {
+      return c.json({ 
+        message: 'If an account exists with this email, a password reset link will be sent.' 
+      })
+    }
+
+    // Generate reset token (expires in 1 hour)
+    const resetToken = auth.generateResetToken()
+    const expiresAt = new Date()
+    expiresAt.setHours(expiresAt.getHours() + 1)
+
+    // Store reset token in database
+    await db.storeResetToken(DATABASE_URL, email, resetToken, expiresAt)
+
+    // In production, send email with reset link
+    // For now, return the token (REMOVE IN PRODUCTION)
+    const resetUrl = `${new URL(c.req.url).origin}/reset-password?token=${resetToken}`
+
+    return c.json({
+      message: 'If an account exists with this email, a password reset link will be sent.',
+      // TODO: Remove in production - only for testing
+      resetUrl: resetUrl,
+      resetToken: resetToken
+    })
+  } catch (error: any) {
+    console.error('Error requesting password reset:', error)
+    return c.json({ error: 'Failed to process password reset request', details: error.message }, 500)
+  }
+})
+
+// Reset password with token
+app.post('/api/auth/reset-password', async (c) => {
+  const { DATABASE_URL } = c.env
+  if (!DATABASE_URL) {
+    return c.json({ error: 'DATABASE_URL not configured' }, 500)
+  }
+
+  try {
+    const { token, newPassword } = await c.req.json()
+
+    // Validate input
+    if (!token || !newPassword) {
+      return c.json({ error: 'Token and new password are required' }, 400)
+    }
+
+    const passwordCheck = auth.validatePassword(newPassword)
+    if (!passwordCheck.valid) {
+      return c.json({ error: passwordCheck.message }, 400)
+    }
+
+    // Get user by reset token (also checks expiry)
+    const user = await db.getUserByResetToken(DATABASE_URL, token)
+    if (!user) {
+      return c.json({ error: 'Invalid or expired reset token' }, 400)
+    }
+
+    // Hash new password
+    const newPasswordHash = await auth.hashPassword(newPassword)
+
+    // Update password and clear reset token
+    await db.updateUserPassword(DATABASE_URL, user.id, newPasswordHash)
+
+    return c.json({
+      message: 'Password reset successfully. You can now login with your new password.'
+    })
+  } catch (error: any) {
+    console.error('Error resetting password:', error)
+    return c.json({ error: 'Failed to reset password', details: error.message }, 500)
   }
 })
 
@@ -610,6 +705,235 @@ app.get('/docs', (c) => {
           </div>
         </div>
       </div>
+    </body>
+    </html>
+  `)
+})
+
+// ============ Password Reset UI Pages ============
+
+// Forgot Password Page
+app.get('/forgot-password', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Forgot Password - Thai Learning Manager</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
+            <div class="text-center mb-8">
+                <i class="fas fa-key text-indigo-600 text-5xl mb-4"></i>
+                <h1 class="text-3xl font-bold text-gray-800">Forgot Password?</h1>
+                <p class="text-gray-600 mt-2">Enter your email to receive a password reset link</p>
+            </div>
+
+            <div id="message" class="hidden mb-4 p-4 rounded"></div>
+
+            <form id="forgotPasswordForm" class="space-y-4">
+                <div>
+                    <label class="block text-gray-700 font-medium mb-2">Email Address</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="your@email.com"
+                    />
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                    <i class="fas fa-paper-plane mr-2"></i>Send Reset Link
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <a href="/" class="text-indigo-600 hover:underline">
+                    <i class="fas fa-arrow-left mr-1"></i>Back to Login
+                </a>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('forgotPasswordForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const email = document.getElementById('email').value;
+                const messageDiv = document.getElementById('message');
+                
+                try {
+                    const response = await fetch('/api/auth/forgot-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    messageDiv.className = 'mb-4 p-4 rounded bg-green-100 text-green-700';
+                    messageDiv.textContent = data.message;
+                    messageDiv.classList.remove('hidden');
+                    
+                    // Show reset URL in development (remove in production)
+                    if (data.resetUrl) {
+                        messageDiv.innerHTML += '<br><br><strong>Development Mode:</strong><br><a href="' + data.resetUrl + '" class="text-blue-600 underline">Click here to reset password</a>';
+                    }
+                    
+                    document.getElementById('forgotPasswordForm').reset();
+                } catch (error) {
+                    messageDiv.className = 'mb-4 p-4 rounded bg-red-100 text-red-700';
+                    messageDiv.textContent = 'An error occurred. Please try again.';
+                    messageDiv.classList.remove('hidden');
+                }
+            });
+        </script>
+    </body>
+    </html>
+  `)
+})
+
+// Reset Password Page
+app.get('/reset-password', (c) => {
+  const token = c.req.query('token');
+  
+  if (!token) {
+    return c.html(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Invalid Reset Link - Thai Learning Manager</title>
+          <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+          <div class="max-w-md w-full bg-white rounded-lg shadow-xl p-8 text-center">
+              <i class="fas fa-exclamation-circle text-red-500 text-5xl mb-4"></i>
+              <h1 class="text-2xl font-bold text-gray-800 mb-4">Invalid Reset Link</h1>
+              <p class="text-gray-600 mb-6">This password reset link is invalid or has expired.</p>
+              <a href="/forgot-password" class="text-indigo-600 hover:underline">Request a new reset link</a>
+          </div>
+      </body>
+      </html>
+    `)
+  }
+  
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Password - Thai Learning Manager</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
+            <div class="text-center mb-8">
+                <i class="fas fa-lock text-indigo-600 text-5xl mb-4"></i>
+                <h1 class="text-3xl font-bold text-gray-800">Reset Password</h1>
+                <p class="text-gray-600 mt-2">Enter your new password</p>
+            </div>
+
+            <div id="message" class="hidden mb-4 p-4 rounded"></div>
+
+            <form id="resetPasswordForm" class="space-y-4">
+                <input type="hidden" id="token" value="${token}">
+                
+                <div>
+                    <label class="block text-gray-700 font-medium mb-2">New Password</label>
+                    <input 
+                        type="password" 
+                        id="newPassword" 
+                        required
+                        minlength="6"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="At least 6 characters"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-medium mb-2">Confirm Password</label>
+                    <input 
+                        type="password" 
+                        id="confirmPassword" 
+                        required
+                        minlength="6"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Re-enter password"
+                    />
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-medium"
+                >
+                    <i class="fas fa-check mr-2"></i>Reset Password
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <a href="/" class="text-indigo-600 hover:underline">
+                    <i class="fas fa-arrow-left mr-1"></i>Back to Login
+                </a>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('resetPasswordForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const token = document.getElementById('token').value;
+                const newPassword = document.getElementById('newPassword').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+                const messageDiv = document.getElementById('message');
+                
+                // Validate passwords match
+                if (newPassword !== confirmPassword) {
+                    messageDiv.className = 'mb-4 p-4 rounded bg-red-100 text-red-700';
+                    messageDiv.textContent = 'Passwords do not match. Please try again.';
+                    messageDiv.classList.remove('hidden');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/auth/reset-password', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token, newPassword })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        messageDiv.className = 'mb-4 p-4 rounded bg-green-100 text-green-700';
+                        messageDiv.textContent = data.message;
+                        messageDiv.classList.remove('hidden');
+                        
+                        // Redirect to login after 2 seconds
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 2000);
+                    } else {
+                        messageDiv.className = 'mb-4 p-4 rounded bg-red-100 text-red-700';
+                        messageDiv.textContent = data.error || 'Failed to reset password';
+                        messageDiv.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    messageDiv.className = 'mb-4 p-4 rounded bg-red-100 text-red-700';
+                    messageDiv.textContent = 'An error occurred. Please try again.';
+                    messageDiv.classList.remove('hidden');
+                }
+            });
+        </script>
     </body>
     </html>
   `)

@@ -115,3 +115,29 @@ export function sanitizeUser(user: any): User {
   const { password_hash, ...sanitized } = user
   return sanitized as User
 }
+
+/**
+ * Generate a password reset token (expires in 1 hour)
+ */
+export function generateResetToken(): string {
+  return nanoid(32) // 32 characters for security
+}
+
+/**
+ * Create a JWT token for password reset (expires in 1 hour)
+ */
+export function createResetToken(email: string, resetToken: string): string {
+  return jwt.sign({ email, resetToken }, JWT_SECRET, { expiresIn: '1h' })
+}
+
+/**
+ * Verify and decode a password reset JWT token
+ */
+export function verifyResetToken(token: string): { email: string; resetToken: string } | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as { email: string; resetToken: string }
+  } catch (error) {
+    console.error('Reset token verification failed:', error)
+    return null
+  }
+}

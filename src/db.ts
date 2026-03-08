@@ -468,6 +468,59 @@ export async function createUser(
 }
 
 /**
+ * Store password reset token for a user
+ */
+export async function storeResetToken(
+  databaseUrl: string,
+  email: string,
+  resetToken: string,
+  expiresAt: Date
+): Promise<void> {
+  const sql = getDbClient(databaseUrl)
+  await sql`
+    UPDATE users 
+    SET reset_token = ${resetToken}, 
+        reset_token_expires = ${expiresAt.toISOString()}
+    WHERE email = ${email}
+  `
+}
+
+/**
+ * Get user by reset token (if not expired)
+ */
+export async function getUserByResetToken(
+  databaseUrl: string,
+  resetToken: string
+): Promise<UserRecord | null> {
+  const sql = getDbClient(databaseUrl)
+  const result = await sql`
+    SELECT * FROM users 
+    WHERE reset_token = ${resetToken} 
+      AND reset_token_expires > NOW()
+    LIMIT 1
+  `
+  return result.length > 0 ? result[0] as UserRecord : null
+}
+
+/**
+ * Update user password and clear reset token
+ */
+export async function updateUserPassword(
+  databaseUrl: string,
+  userId: string,
+  newPasswordHash: string
+): Promise<void> {
+  const sql = getDbClient(databaseUrl)
+  await sql`
+    UPDATE users 
+    SET password_hash = ${newPasswordHash},
+        reset_token = NULL,
+        reset_token_expires = NULL
+    WHERE id = ${userId}
+  `
+}
+
+/**
  * Update user's last login timestamp
  */
 export async function updateUserLastLogin(
