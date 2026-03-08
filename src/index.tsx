@@ -9,7 +9,7 @@ import * as ai from './ai'
 import * as auth from './auth'
 
 // Version constant
-const VERSION = '1.6.0'
+const VERSION = '1.6.1'
 
 // Bindings for Cloudflare environment variables
 type Bindings = {
