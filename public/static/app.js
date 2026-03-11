@@ -1109,7 +1109,7 @@ function renderEntriesList(entries) {
               <div class="flex-1">
                 <div class="flex items-center mb-2">
                   <h3 class="text-2xl font-bold text-gray-800 thai-text mr-3">${entry.thai_script}</h3>
-                  <span class="text-lg text-gray-500">${toneEmojis[entry.tone]}</span>
+                  <span class="inline-block">${window.getToneIndicator ? window.getToneIndicator(entry.tone, 'small') : entry.tone}</span>
                   <span class="ml-3 px-2 py-1 text-xs font-semibold rounded ${cefrColors[entry.cefr_level]}">${entry.cefr_level}</span>
                   <span class="ml-2 px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">${entry.entry_type}</span>
                   ${entry.archived ? '<span class="ml-2 px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded">Archived</span>' : ''}
