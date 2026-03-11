@@ -880,11 +880,11 @@ async function loadEntriesPage() {
               <label class="block text-sm font-medium text-gray-700 mb-2">Tone</label>
               <select id="filter-tone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" onchange="applyFilters()">
                 <option value="">All Tones</option>
-                <option value="mid">🔵 Mid</option>
-                <option value="low">🟢 Low</option>
-                <option value="falling">🔴 Falling</option>
-                <option value="high">🟠 High</option>
-                <option value="rising">🟣 Rising</option>
+                <option value="mid">→ Mid</option>
+                <option value="low">↘ Low</option>
+                <option value="falling">↓ Falling</option>
+                <option value="high">↑ High</option>
+                <option value="rising">↗ Rising</option>
               </select>
             </div>
             
@@ -951,11 +951,11 @@ async function loadEntriesPage() {
                   </label>
                   <select id="tone" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
                     <option value="">Select tone</option>
-                    <option value="mid">🔵 Mid</option>
-                    <option value="low">🟢 Low</option>
-                    <option value="falling">🔴 Falling</option>
-                    <option value="high">🟠 High</option>
-                    <option value="rising">🟣 Rising</option>
+                    <option value="mid">→ Mid</option>
+                    <option value="low">↘ Low</option>
+                    <option value="falling">↓ Falling</option>
+                    <option value="high">↑ High</option>
+                    <option value="rising">↗ Rising</option>
                   </select>
                 </div>
                 
@@ -1111,12 +1111,14 @@ function renderEntriesList(entries) {
     return;
   }
   
-  const toneEmojis = {
-    'mid': '🔵',
-    'low': '🟢',
-    'falling': '🔴',
-    'high': '🟠',
-    'rising': '🟣'
+  // Using visual tone indicators instead of emojis
+  const getToneIndicatorForLearning = (tone) => {
+    if (typeof window.getToneIndicator === 'function') {
+      return window.getToneIndicator(tone, 'small');
+    }
+    // Fallback to arrow if getToneIndicator not available
+    const arrows = { 'mid': '→', 'low': '↘', 'falling': '↓', 'high': '↑', 'rising': '↗' };
+    return `<span class="inline-flex items-center">${arrows[tone] || ''}</span>`;
   };
   
   const cefrColors = {
@@ -1441,12 +1443,14 @@ function renderLearningCard() {
   const progress = learningSession.currentIndex + 1;
   const total = learningSession.items.length;
   
-  const toneEmojis = {
-    'mid': '🔵',
-    'low': '🟢',
-    'falling': '🔴',
-    'high': '🟠',
-    'rising': '🟣'
+  // Using visual tone indicators instead of emojis
+  const getToneIndicatorForLearning = (tone) => {
+    if (typeof window.getToneIndicator === 'function') {
+      return window.getToneIndicator(tone, 'small');
+    }
+    // Fallback to arrow if getToneIndicator not available
+    const arrows = { 'mid': '→', 'low': '↘', 'falling': '↓', 'high': '↑', 'rising': '↗' };
+    return `<span class="inline-flex items-center">${arrows[tone] || ''}</span>`;
   };
   
   container.innerHTML = `
@@ -1479,7 +1483,7 @@ function renderLearningCard() {
           </div>
           <div class="text-6xl font-bold text-gray-800 thai-text mb-4">${item.thai_script}</div>
           <div class="text-3xl text-gray-600 mb-2">${item.romanization}</div>
-          <div class="text-2xl mb-4">${toneEmojis[item.tone]} ${item.tone} tone</div>
+          <div class="text-2xl mb-4 flex items-center justify-center gap-2">${getToneIndicatorForLearning(item.tone)} <span>${item.tone} tone</span></div>
           <p class="text-gray-500 text-sm">Click to see meaning</p>
         </div>
         
@@ -1718,12 +1722,14 @@ function renderReviewCard() {
   const progress = reviewSession.currentIndex + 1;
   const total = reviewSession.items.length;
   
-  const toneEmojis = {
-    'mid': '🔵',
-    'low': '🟢',
-    'falling': '🔴',
-    'high': '🟠',
-    'rising': '🟣'
+  // Using visual tone indicators instead of emojis
+  const getToneIndicatorForLearning = (tone) => {
+    if (typeof window.getToneIndicator === 'function') {
+      return window.getToneIndicator(tone, 'small');
+    }
+    // Fallback to arrow if getToneIndicator not available
+    const arrows = { 'mid': '→', 'low': '↘', 'falling': '↓', 'high': '↑', 'rising': '↗' };
+    return `<span class="inline-flex items-center">${arrows[tone] || ''}</span>`;
   };
   
   container.innerHTML = `
