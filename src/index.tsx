@@ -1292,29 +1292,10 @@ app.get('/', (c) => {
                         <i class="fas fa-music text-purple-600 mr-2"></i>
                         Thai Tone Reference
                     </h3>
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
-                        <div class="bg-white rounded p-3 text-center">
-                            <div class="text-2xl mb-1">🔵</div>
-                            <p class="font-semibold text-gray-800">Mid</p>
-                            <p class="text-gray-600 text-xs">Flat tone</p>
-                        </div>
-                        <div class="bg-white rounded p-3 text-center">
-                            <div class="text-2xl mb-1">🟢</div>
-                            <p class="font-semibold text-gray-800">Low</p>
-                            <p class="text-gray-600 text-xs">Low falling</p>
-                        </div>
-                        <div class="bg-white rounded p-3 text-center">
-                            <div class="text-2xl mb-1">🔴</div>
-                            <p class="font-semibold text-gray-800">Falling</p>
-                            <p class="text-gray-600 text-xs">Sharp drop</p>
-                        </div>
-                        <div class="bg-white rounded p-3 text-center">
-                            <div class="text-2xl mb-1">🟠</div>
-                            <p class="font-semibold text-gray-800">High</p>
-                            <p class="text-gray-600 text-xs">High level</p>
-                        </div>
-                        <div class="bg-white rounded p-3 text-center">
-                            <div class="text-2xl mb-1">🟣</div>
+                    <div id="tone-reference-cards" class="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
+                        <!-- Tone indicators will be rendered here by JavaScript -->
+                    </div>
+                </div>
                             <p class="font-semibold text-gray-800">Rising</p>
                             <p class="text-gray-600 text-xs">Upward rise</p>
                         </div>

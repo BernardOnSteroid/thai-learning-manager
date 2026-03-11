@@ -380,6 +380,10 @@ async function loadDashboard() {
     console.log('Rendering charts...');
     renderCharts(dashboardStats, cefrProgression);
     
+    // Render tone reference cards
+    console.log('Rendering tone reference...');
+    renderToneReference();
+    
     console.log('Dashboard loaded successfully');
     hideLoading('dashboard-content');
   } catch (error) {
@@ -644,11 +648,11 @@ function renderToneChart(byTone) {
   }
   
   const toneNames = {
-    'mid': '🔵 Mid',
-    'low': '🟢 Low',
-    'falling': '🔴 Falling',
-    'high': '🟠 High',
-    'rising': '🟣 Rising'
+    'mid': 'Mid (→)',
+    'low': 'Low (↘)',
+    'falling': 'Falling (↓)',
+    'high': 'High (↑)',
+    'rising': 'Rising (↗)'
   };
   
   if (charts.toneChart) {
@@ -702,6 +706,36 @@ function renderToneChart(byTone) {
       }
     }
   });
+}
+
+function renderToneReference() {
+  const container = document.getElementById('tone-reference-cards');
+  if (!container) return;
+  
+  const tones = ['mid', 'low', 'falling', 'high', 'rising'];
+  const toneDescriptions = {
+    'mid': { name: 'Mid Tone', desc: 'Flat, neutral pitch', chao: '33' },
+    'low': { name: 'Low Tone', desc: 'Gentle fall', chao: '21' },
+    'falling': { name: 'Falling Tone', desc: 'Sharp drop', chao: '51' },
+    'high': { name: 'High Tone', desc: 'Rising high', chao: '45' },
+    'rising': { name: 'Rising Tone', desc: 'Climbing up', chao: '24' }
+  };
+  
+  container.innerHTML = tones.map(tone => {
+    const info = toneDescriptions[tone];
+    const indicator = window.getToneIndicator ? window.getToneIndicator(tone, 'large') : `<span>${tone}</span>`;
+    
+    return `
+      <div class="bg-white rounded-lg p-4 text-center shadow-sm hover:shadow-md transition-shadow">
+        <div class="flex justify-center mb-2">
+          ${indicator}
+        </div>
+        <p class="font-semibold text-gray-800 text-sm">${info.name}</p>
+        <p class="text-gray-600 text-xs mt-1">${info.desc}</p>
+        <p class="text-gray-500 text-xs mt-1">Chao: ${info.chao}</p>
+      </div>
+    `;
+  }).join('');
 }
 
 // ============ Navigation ============
