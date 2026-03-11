@@ -1,0 +1,187 @@
+/* ============================================================
+ * Thai Tone Visual Indicators - SVG-based pitch contours
+ * Version: 2.0.0
+ * ============================================================ */
+
+/* Tone indicator container */
+.tone-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: relative;
+  margin-right: 8px;
+}
+
+/* SVG styling */
+.tone-indicator svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Tone-specific background colors (subtle) */
+.tone-indicator.mid {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.tone-indicator.low {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+}
+
+.tone-indicator.falling {
+  background: linear-gradient(135deg, #fce4ec 0%, #f8bbd0 100%);
+}
+
+.tone-indicator.high {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+}
+
+.tone-indicator.rising {
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}
+
+/* Tone curves - main path color */
+.tone-curve {
+  stroke-width: 2.5;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tone-indicator.mid .tone-curve {
+  stroke: #1976d2; /* Blue */
+}
+
+.tone-indicator.low .tone-curve {
+  stroke: #f57c00; /* Orange */
+}
+
+.tone-indicator.falling .tone-curve {
+  stroke: #c2185b; /* Pink */
+}
+
+.tone-indicator.high .tone-curve {
+  stroke: #388e3c; /* Green */
+}
+
+.tone-indicator.rising .tone-curve {
+  stroke: #7b1fa2; /* Purple */
+}
+
+/* Arrow markers */
+.tone-arrow {
+  fill: currentColor;
+}
+
+/* Hover effect */
+.tone-indicator:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+/* Tooltip on hover */
+.tone-indicator::after {
+  content: attr(data-tone);
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+
+.tone-indicator:hover::after {
+  opacity: 1;
+}
+
+/* Large version for cards */
+.tone-indicator-large {
+  width: 48px;
+  height: 48px;
+}
+
+.tone-indicator-large svg {
+  width: 36px;
+  height: 36px;
+}
+
+.tone-indicator-large .tone-curve {
+  stroke-width: 3;
+}
+
+/* Small version for inline text */
+.tone-indicator-small {
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+}
+
+.tone-indicator-small svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tone-indicator-small .tone-curve {
+  stroke-width: 2;
+}
+
+/* Tone badge with indicator (replaces old color dots) */
+.tone-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f5f5f5;
+}
+
+/* Animation for learning/practice mode */
+@keyframes tone-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.tone-indicator.active {
+  animation: tone-pulse 1s ease-in-out infinite;
+}
+
+/* Accessibility - focus states */
+.tone-indicator:focus-visible {
+  outline: 3px solid #2196f3;
+  outline-offset: 2px;
+}
+
+/* Print styles */
+@media print {
+  .tone-indicator {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .tone-indicator {
+    background: linear-gradient(135deg, #424242 0%, #303030 100%);
+  }
+  
+  .tone-badge {
+    background: #424242;
+    color: #e0e0e0;
+  }
+}

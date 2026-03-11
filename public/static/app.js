@@ -2149,7 +2149,8 @@ function displayAIResults(entries) {
           <div class="flex items-center gap-2 mb-2">
             <span class="text-2xl thai-text">${entry.thai_script}</span>
             <span class="text-gray-600">(${entry.romanization})</span>
-            <span class="badge-${entry.tone}">${getToneEmoji(entry.tone)} ${entry.tone}</span>
+            <span class="inline-flex">${getToneIndicator(entry.tone, 'small')}</span>
+            <span class="text-sm font-medium">${entry.tone}</span>
             <span class="badge-${entry.entry_type}">${entry.entry_type}</span>
             <span class="badge-${entry.cefr_level}">${entry.cefr_level}</span>
           </div>

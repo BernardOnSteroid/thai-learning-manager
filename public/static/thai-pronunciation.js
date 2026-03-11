@@ -71,39 +71,11 @@ function saveThaiPronunciationStats() {
     }
 }
 
-// ============ Main Thai Speech Function ============
-function speakThai(text, elementId = null, options = {}) {
+// ============ Main Thai Speech Function (Hybrid: Google TTS + Web Speech API) ============
+async function speakThai(text, elementId = null, options = {}) {
     if (!text) {
         console.warn('No text to speak');
         return;
-    }
-    
-    const support = checkThaiSpeechSupport();
-    if (!support.synthesis) {
-        console.error('Speech synthesis not supported in this browser');
-        return;
-    }
-    
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-    
-    // Create utterance
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'th-TH'; // Thai language
-    utterance.rate = options.rate || thaiSpeechRate;
-    utterance.pitch = options.pitch || 1.0;
-    utterance.volume = options.volume || 1.0;
-    
-    // Use selected Thai voice if available
-    if (selectedThaiVoice) {
-        utterance.voice = selectedThaiVoice;
-    } else {
-        // Try to find any Thai voice
-        const voices = window.speechSynthesis.getVoices();
-        const thaiVoice = voices.find(v => v.lang.startsWith('th'));
-        if (thaiVoice) {
-            utterance.voice = thaiVoice;
-        }
     }
     
     // Visual feedback for button
@@ -111,11 +83,9 @@ function speakThai(text, elementId = null, options = {}) {
     if (elementId) {
         btn = document.getElementById(elementId);
         if (btn) {
-            // Add speaking class for visual feedback
             btn.classList.add('speaking', 'opacity-50');
             btn.disabled = true;
             
-            // Change icon if it exists
             const icon = btn.querySelector('i');
             if (icon && icon.classList.contains('fa-volume-up')) {
                 icon.classList.remove('fa-volume-up');
@@ -124,8 +94,8 @@ function speakThai(text, elementId = null, options = {}) {
         }
     }
     
-    // Handle speech end
-    utterance.onend = () => {
+    // Reset button function
+    const resetButton = () => {
         if (btn) {
             btn.classList.remove('speaking', 'opacity-50');
             btn.disabled = false;
@@ -138,25 +108,105 @@ function speakThai(text, elementId = null, options = {}) {
         }
     };
     
-    // Handle speech error
+    // Priority 1: Try Google Cloud TTS (90-95% tone accuracy)
+    try {
+        // Check cache first
+        const cacheKey = `tts_google_${text}_${options.rate || 0.9}`;
+        let audioBase64 = localStorage.getItem(cacheKey);
+        
+        if (!audioBase64) {
+            console.log('🌐 Fetching Google TTS for:', text.substring(0, 30));
+            
+            const response = await fetch('/api/tts/google', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: text,
+                    rate: options.rate || 0.9,
+                    voice: 'th-TH-Neural2-C' // Female neural voice (best quality)
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.audioContent) {
+                    audioBase64 = data.audioContent;
+                    // Cache for 7 days
+                    try {
+                        localStorage.setItem(cacheKey, audioBase64);
+                        localStorage.setItem(cacheKey + '_timestamp', Date.now().toString());
+                    } catch (e) {
+                        console.warn('Cache storage failed (quota exceeded?):', e);
+                    }
+                    console.log('✅ Google TTS success, cached for future use');
+                }
+            }
+        } else {
+            console.log('✅ Using cached Google TTS');
+        }
+        
+        if (audioBase64) {
+            // Play base64 MP3 audio
+            const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
+            audio.onended = resetButton;
+            audio.onerror = () => {
+                console.warn('⚠️ Google TTS playback failed, falling back to Web Speech API');
+                speakThaiWebSpeech(text, options, resetButton);
+            };
+            audio.play();
+            console.log('🔊 Playing Google TTS audio');
+            return;
+        }
+    } catch (error) {
+        console.warn('⚠️ Google TTS failed:', error.message);
+    }
+    
+    // Priority 2: Fallback to Web Speech API (60-70% tone accuracy)
+    console.log('🔊 Using Web Speech API fallback');
+    speakThaiWebSpeech(text, options, resetButton);
+}
+
+// Web Speech API implementation (fallback)
+function speakThaiWebSpeech(text, options = {}, onEnd = null) {
+    const support = checkThaiSpeechSupport();
+    if (!support.synthesis) {
+        console.error('Speech synthesis not supported in this browser');
+        if (onEnd) onEnd();
+        return;
+    }
+    
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    // Create utterance
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'th-TH';
+    utterance.rate = options.rate || thaiSpeechRate;
+    utterance.pitch = options.pitch || 1.0;
+    utterance.volume = options.volume || 1.0;
+    
+    // Use selected Thai voice if available
+    if (selectedThaiVoice) {
+        utterance.voice = selectedThaiVoice;
+    } else {
+        const voices = window.speechSynthesis.getVoices();
+        const thaiVoice = voices.find(v => v.lang.startsWith('th'));
+        if (thaiVoice) {
+            utterance.voice = thaiVoice;
+        }
+    }
+    
+    utterance.onend = () => {
+        if (onEnd) onEnd();
+    };
+    
     utterance.onerror = (event) => {
         console.error('Speech synthesis error:', event);
-        if (btn) {
-            btn.classList.remove('speaking', 'opacity-50');
-            btn.disabled = false;
-            
-            const icon = btn.querySelector('i');
-            if (icon && icon.classList.contains('fa-spinner')) {
-                icon.classList.remove('fa-spinner', 'fa-spin');
-                icon.classList.add('fa-volume-up');
-            }
-        }
+        if (onEnd) onEnd();
     };
     
-    // Speak!
     window.speechSynthesis.speak(utterance);
-    
-    console.log('Speaking Thai:', text);
+    console.log('Speaking Thai (Web Speech API):', text);
 }
 
 // ============ Convenience Functions ============

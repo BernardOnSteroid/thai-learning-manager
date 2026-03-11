@@ -9,7 +9,7 @@ import * as ai from './ai'
 import * as auth from './auth'
 
 // Version constant
-const VERSION = '1.6.1'
+const VERSION = '1.7.0'
 
 // Bindings for Cloudflare environment variables
 type Bindings = {
@@ -323,6 +323,88 @@ app.get('/api/auth/me', async (c) => {
   } catch (error: any) {
     console.error('Error verifying token:', error)
     return c.json({ error: 'Failed to verify token', details: error.message }, 500)
+  }
+})
+
+// ============ Text-to-Speech (Google Cloud TTS) ============
+
+app.post('/api/tts/google', async (c) => {
+  const { GOOGLE_TTS_API_KEY } = c.env
+  
+  if (!GOOGLE_TTS_API_KEY) {
+    console.warn('⚠️ GOOGLE_TTS_API_KEY not configured, falling back to Web Speech API')
+    return c.json({ 
+      error: 'Google TTS not configured',
+      fallback: 'web-speech-api'
+    }, 503)
+  }
+
+  try {
+    const { text, rate = 0.9, voice = 'th-TH-Neural2-C' } = await c.req.json()
+
+    if (!text) {
+      return c.json({ error: 'Text is required' }, 400)
+    }
+
+    console.log('🔊 Generating TTS for:', text.substring(0, 50))
+
+    // Call Google Cloud Text-to-Speech API
+    const response = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=' + GOOGLE_TTS_API_KEY, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        input: { text },
+        voice: {
+          languageCode: 'th-TH',
+          name: voice, // th-TH-Neural2-C (female neural, best quality)
+          ssmlGender: voice.includes('C') ? 'FEMALE' : 'MALE'
+        },
+        audioConfig: {
+          audioEncoding: 'MP3',
+          speakingRate: rate,
+          pitch: 0,
+          volumeGainDb: 0
+        }
+      })
+    })
+
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('Google TTS API error:', error)
+      return c.json({ 
+        error: 'Google TTS API error', 
+        details: error,
+        fallback: 'web-speech-api'
+      }, response.status)
+    }
+
+    const data = await response.json()
+
+    if (!data.audioContent) {
+      return c.json({ 
+        error: 'No audio content returned',
+        fallback: 'web-speech-api'
+      }, 500)
+    }
+
+    console.log('✅ TTS generated successfully')
+
+    // Return base64 MP3 audio
+    return c.json({
+      audioContent: data.audioContent, // Base64 encoded MP3
+      voice: voice,
+      rate: rate
+    })
+
+  } catch (error: any) {
+    console.error('TTS generation error:', error)
+    return c.json({ 
+      error: 'Failed to generate speech',
+      details: error.message,
+      fallback: 'web-speech-api'
+    }, 500)
   }
 })
 
@@ -953,6 +1035,7 @@ app.get('/', (c) => {
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Taviraj:wght@400;500;600;700&family=Trirong:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="/static/tone-indicators.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
         <style>
           body {
@@ -1445,6 +1528,7 @@ app.get('/', (c) => {
         </footer>
 
         <!-- Load Scripts -->
+        <script src="/static/tone-indicators.js"></script>
         <script src="/static/thai-pronunciation.js"></script>
         <script src="/static/driving-mode.js"></script>
         <script src="/static/app.js"></script>
