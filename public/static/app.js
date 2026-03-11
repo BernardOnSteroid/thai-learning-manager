@@ -1,8 +1,8 @@
 // Thai Learning Manager - Frontend JavaScript
-// Version: 1.0.0-thai
+// Version: 1.7.1
 // Build Date: 2026-03-05
 
-console.log('🇹🇭 Thai Learning Manager Frontend v1.0.0 loaded');
+console.log('🇹🇭 Thai Learning Manager Frontend v1.7.1 loaded');
 console.log('📍 Script execution started');
 console.log('🌐 Document ready state:', document.readyState);
 

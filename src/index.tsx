@@ -1078,7 +1078,7 @@ app.get('/', (c) => {
                                 <i class="fas fa-language text-blue-600 mr-2"></i>
                                 🇹🇭 Thai Learning Manager
                             </h1>
-                            <p class="text-xs text-gray-500 ml-9">v1.5.0</p>
+                            <p class="text-xs text-gray-500 ml-9">v${VERSION}</p>
                         </div>
                     </div>
                     
