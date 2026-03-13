@@ -2001,6 +2001,10 @@ function initializeApp() {
   }
   
   // Check admin access
+  console.log('🔐 Checking admin access...');
+  const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+  console.log('Token exists?', !!token);
+  console.log('checkAdminAccess exists?', typeof window.checkAdminAccess);
   if (typeof window.checkAdminAccess === 'function') {
     window.checkAdminAccess();
   }

@@ -1,38 +1,61 @@
 // Thai Learning Manager - Admin Panel
 // Version: 1.8.0
 
-console.log('📊 Admin panel loaded');
+console.log('📊 Admin panel script loading...');
+
+// Helper to get auth token
+function getAuthToken() {
+  return localStorage.getItem('authToken') || localStorage.getItem('token');
+}
 
 // Check if user is admin and show/hide admin link
 async function checkAdminAccess() {
+  console.log('🔍 checkAdminAccess() called');
+  const token = getAuthToken();
+  console.log('Token available?', !!token);
+  
+  if (!token) {
+    console.log('❌ No token found, skipping admin check');
+    return false;
+  }
+  
   try {
+    console.log('🌐 Fetching /api/admin/stats...');
     const response = await fetch('/api/admin/stats', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${token}`
       }
     });
+    
+    console.log('📥 Admin stats response:', response.status, response.ok);
     
     if (response.ok) {
       // User is admin, show admin link
       const adminLink = document.getElementById('admin-nav-link');
+      console.log('🔗 Admin link element found?', !!adminLink);
       if (adminLink) {
         adminLink.style.display = 'inline-block';
+        console.log('✅ Admin link shown!');
       }
       return true;
+    } else {
+      console.log('❌ Not admin or unauthorized');
     }
     return false;
   } catch (error) {
-    console.error('Admin check failed:', error);
+    console.error('❌ Admin check failed:', error);
     return false;
   }
 }
+
+console.log('✅ Admin panel script loaded, checkAdminAccess defined');
 
 // Load admin stats
 async function loadAdminStats() {
   try {
     const response = await fetch('/api/admin/stats', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
     
@@ -72,7 +95,7 @@ async function loadUsers() {
   try {
     const response = await fetch('/api/admin/users', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
     
@@ -176,7 +199,7 @@ async function toggleUserStatus(userId) {
     const response = await fetch(`/api/admin/users/${userId}/toggle-active`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${getAuthToken()}`
       }
     });
     
