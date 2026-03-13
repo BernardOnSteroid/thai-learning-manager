@@ -779,6 +779,11 @@ function showPage(pageName) {
     case 'review':
       loadReviewPage();
       break;
+    case 'admin':
+      if (typeof window.initAdminPage === 'function') {
+        window.initAdminPage();
+      }
+      break;
   }
 }
 
@@ -1993,6 +1998,11 @@ function initializeApp() {
   const mobileMenuBtn = document.getElementById('mobile-menu-btn');
   if (mobileMenuBtn) {
     mobileMenuBtn.addEventListener('click', toggleMobileMenu);
+  }
+  
+  // Check admin access
+  if (typeof window.checkAdminAccess === 'function') {
+    window.checkAdminAccess();
   }
   
   // Load initial page

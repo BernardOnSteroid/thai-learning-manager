@@ -711,3 +711,122 @@ export async function getUserDueReviews(
   return result as any[]
 }
 
+// ============================================================
+// ADMIN FUNCTIONS - User Management
+// ============================================================
+
+/**
+ * Get all users with their stats (admin only)
+ */
+export async function getAllUsers(
+  databaseUrl: string
+): Promise<any[]> {
+  const sql = getDbClient(databaseUrl)
+  
+  const result = await sql`
+    SELECT 
+      u.id,
+      u.email,
+      u.name,
+      u.created_at,
+      u.last_login,
+      u.is_active,
+      u.is_admin,
+      u.subscription_status,
+      u.subscription_start_date,
+      u.subscription_end_date,
+      u.stripe_customer_id,
+      u.stripe_subscription_id,
+      COUNT(DISTINCT e.id) as entries_count,
+      COUNT(DISTINCT up.id) as progress_count
+    FROM users u
+    LEFT JOIN entries e ON e.created_by = u.id
+    LEFT JOIN user_progress up ON up.user_id = u.id
+    GROUP BY u.id, u.email, u.name, u.created_at, u.last_login, 
+             u.is_active, u.is_admin, u.subscription_status,
+             u.subscription_start_date, u.subscription_end_date,
+             u.stripe_customer_id, u.stripe_subscription_id
+    ORDER BY u.created_at DESC
+  `
+  
+  return result as any[]
+}
+
+/**
+ * Toggle user active status (lock/unlock account)
+ */
+export async function toggleUserActive(
+  databaseUrl: string,
+  userId: string
+): Promise<any> {
+  const sql = getDbClient(databaseUrl)
+  
+  // First get current status
+  const currentUser = await sql`
+    SELECT is_active FROM users WHERE id = ${userId}
+  `
+  
+  if (!currentUser || currentUser.length === 0) {
+    throw new Error('User not found')
+  }
+  
+  const newStatus = currentUser[0].is_active === 1 ? 0 : 1
+  
+  // Update status
+  await sql`
+    UPDATE users 
+    SET is_active = ${newStatus}
+    WHERE id = ${userId}
+  `
+  
+  // Return updated user
+  const result = await sql`
+    SELECT id, email, name, is_active 
+    FROM users 
+    WHERE id = ${userId}
+  `
+  
+  return result[0]
+}
+
+/**
+ * Get admin statistics
+ */
+export async function getAdminStats(
+  databaseUrl: string
+): Promise<any> {
+  const sql = getDbClient(databaseUrl)
+  
+  // Get user counts
+  const userStats = await sql`
+    SELECT 
+      COUNT(*) as total_users,
+      SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_users,
+      SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) as locked_users,
+      SUM(CASE WHEN subscription_status = 'trial' THEN 1 ELSE 0 END) as trial_users,
+      SUM(CASE WHEN subscription_status = 'active' THEN 1 ELSE 0 END) as paid_users,
+      SUM(CASE WHEN subscription_status = 'expired' THEN 1 ELSE 0 END) as expired_users
+    FROM users
+  `
+  
+  // Get recent signups (last 7 days)
+  const recentSignups = await sql`
+    SELECT COUNT(*) as count
+    FROM users
+    WHERE created_at >= NOW() - INTERVAL '7 days'
+  `
+  
+  // Get total entries and progress
+  const contentStats = await sql`
+    SELECT 
+      (SELECT COUNT(*) FROM entries WHERE archived = false) as total_entries,
+      (SELECT COUNT(*) FROM user_progress) as total_progress_records
+  `
+  
+  return {
+    users: userStats[0],
+    recent_signups: recentSignups[0].count,
+    content: contentStats[0]
+  }
+}
+

@@ -1,6 +1,6 @@
 {
   "name": "thai-learning-manager",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "CEFR-based Thai learning with spaced repetition, tones, classifiers, and Driving Mode",
   "type": "module",
   "scripts": {

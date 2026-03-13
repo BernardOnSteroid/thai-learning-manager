@@ -9,7 +9,7 @@ import * as ai from './ai'
 import * as auth from './auth'
 
 // Version constant
-const VERSION = '1.7.1'
+const VERSION = '1.8.0'
 
 // Bindings for Cloudflare environment variables
 type Bindings = {
@@ -1099,6 +1099,9 @@ app.get('/', (c) => {
                         <a href="#" data-page="driving" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
                             <i class="fas fa-car mr-1"></i>Driving Mode
                         </a>
+                        <a href="#" data-page="admin" id="admin-nav-link" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600" style="display: none;">
+                            <i class="fas fa-shield-alt mr-1"></i>Admin
+                        </a>
                         <a href="/docs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
                             <i class="fas fa-book mr-1"></i>Docs
                         </a>
@@ -1495,6 +1498,40 @@ app.get('/', (c) => {
                 </div>
             </div>
 
+            <!-- Admin Page -->
+            <div id="admin-page" class="hidden">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-shield-alt text-red-600 mr-2"></i>
+                        Admin Panel
+                    </h2>
+                    <p class="text-gray-600">Manage users and subscriptions</p>
+                </div>
+
+                <!-- Admin Stats -->
+                <div id="admin-stats" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <!-- Stats will be loaded here -->
+                </div>
+
+                <!-- User Management -->
+                <div class="bg-white rounded-lg shadow-lg">
+                    <div class="p-6 border-b border-gray-200">
+                        <h3 class="text-xl font-bold text-gray-800">
+                            <i class="fas fa-users mr-2"></i>
+                            User Management
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div id="users-table-container">
+                            <div class="text-center py-8">
+                                <i class="fas fa-spinner fa-spin text-4xl text-gray-400"></i>
+                                <p class="text-gray-500 mt-4">Loading users...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             </div><!-- #app -->
         </main>
 
@@ -1512,10 +1549,115 @@ app.get('/', (c) => {
         <script src="/static/tone-indicators.js"></script>
         <script src="/static/thai-pronunciation.js"></script>
         <script src="/static/driving-mode.js"></script>
+        <script src="/static/admin.js"></script>
         <script src="/static/app.js"></script>
     </body>
     </html>
   `)
+})
+
+// ============================================================
+// ADMIN ROUTES - User Management
+// ============================================================
+
+// Middleware to check if user is admin
+const requireAdmin = async (c: any, next: any) => {
+  const userId = c.get('userId')
+  if (!userId) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  
+  const databaseUrl = c.env.DATABASE_URL
+  if (!databaseUrl) {
+    return c.json({ error: 'Database not configured' }, 500)
+  }
+  
+  try {
+    // Check if user is admin
+    const user = await db.getUserById(databaseUrl, userId)
+    if (!user || !user.is_admin) {
+      return c.json({ error: 'Forbidden - Admin access required' }, 403)
+    }
+    
+    await next()
+  } catch (error: any) {
+    console.error('Admin check error:', error)
+    return c.json({ error: 'Failed to verify admin status' }, 500)
+  }
+}
+
+// Get all users (admin only)
+app.get('/api/admin/users', requireAdmin, async (c) => {
+  const databaseUrl = c.env.DATABASE_URL
+  if (!databaseUrl) {
+    return c.json({ error: 'Database not configured' }, 500)
+  }
+  
+  try {
+    const users = await db.getAllUsers(databaseUrl)
+    
+    // Remove sensitive data
+    const sanitizedUsers = users.map((user: any) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      created_at: user.created_at,
+      last_login: user.last_login,
+      is_active: user.is_active,
+      is_admin: user.is_admin,
+      subscription_status: user.subscription_status || 'trial',
+      subscription_start_date: user.subscription_start_date,
+      subscription_end_date: user.subscription_end_date,
+      entries_count: user.entries_count || 0,
+      progress_count: user.progress_count || 0
+    }))
+    
+    return c.json({ users: sanitizedUsers })
+  } catch (error: any) {
+    console.error('Error fetching users:', error)
+    return c.json({ error: 'Failed to fetch users' }, 500)
+  }
+})
+
+// Toggle user active status (lock/unlock account)
+app.patch('/api/admin/users/:userId/toggle-active', requireAdmin, async (c) => {
+  const targetUserId = c.req.param('userId')
+  const databaseUrl = c.env.DATABASE_URL
+  
+  if (!databaseUrl) {
+    return c.json({ error: 'Database not configured' }, 500)
+  }
+  
+  try {
+    const result = await db.toggleUserActive(databaseUrl, targetUserId)
+    return c.json({ 
+      success: true, 
+      user: {
+        id: result.id,
+        email: result.email,
+        is_active: result.is_active
+      }
+    })
+  } catch (error: any) {
+    console.error('Error toggling user status:', error)
+    return c.json({ error: 'Failed to update user status' }, 500)
+  }
+})
+
+// Get admin stats
+app.get('/api/admin/stats', requireAdmin, async (c) => {
+  const databaseUrl = c.env.DATABASE_URL
+  if (!databaseUrl) {
+    return c.json({ error: 'Database not configured' }, 500)
+  }
+  
+  try {
+    const stats = await db.getAdminStats(databaseUrl)
+    return c.json(stats)
+  } catch (error: any) {
+    console.error('Error fetching admin stats:', error)
+    return c.json({ error: 'Failed to fetch stats' }, 500)
+  }
 })
 
 export default app
