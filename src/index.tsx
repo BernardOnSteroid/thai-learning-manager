@@ -1099,7 +1099,7 @@ app.get('/', (c) => {
                         <a href="#" data-page="driving" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
                             <i class="fas fa-car mr-1"></i>Driving Mode
                         </a>
-                        <a href="#" data-page="admin" id="admin-nav-link" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600" style="display: none;">
+                        <a href="#" data-page="admin" id="admin-nav-link" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
                             <i class="fas fa-shield-alt mr-1"></i>Admin
                         </a>
                         <a href="/docs" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-blue-600">
