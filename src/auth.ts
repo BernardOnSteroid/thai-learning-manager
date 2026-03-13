@@ -27,6 +27,8 @@ export interface User {
   created_at?: string
   last_login?: string
   is_active?: number
+  is_admin?: number
+  subscription_status?: string
 }
 
 /**
